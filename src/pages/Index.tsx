@@ -1,12 +1,69 @@
-import { useState } from "react";
-import { Film, LayoutGrid } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { Film, LayoutGrid, Play, Square, RotateCcw } from "lucide-react";
 import { GeneratorView } from "@/components/GeneratorView";
 import { GalleryView } from "@/components/GalleryView";
-import type { GeneratedContent } from "@/lib/cinematic-data";
+import { Button } from "@/components/ui/button";
+import { STYLES, generatePrompt, type GeneratedContent } from "@/lib/cinematic-data";
+import { toast } from "@/hooks/use-toast";
+
+const MAX_AUTO = 20;
 
 const Index = () => {
   const [tab, setTab] = useState<"generate" | "gallery">("generate");
   const [gallery, setGallery] = useState<GeneratedContent[]>([]);
+  const [autoRunning, setAutoRunning] = useState(false);
+  const [autoCount, setAutoCount] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stopAuto = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    setAutoRunning(false);
+  }, []);
+
+  const generateOne = useCallback(() => {
+    const style = STYLES[Math.floor(Math.random() * STYLES.length)];
+    const result = generatePrompt(style);
+    const content: GeneratedContent = {
+      ...result,
+      id: crypto.randomUUID(),
+      imageUrl: `https://picsum.photos/seed/${Date.now()}/800/450`,
+      createdAt: new Date(),
+    };
+    return content;
+  }, []);
+
+  const startAuto = useCallback(() => {
+    if (autoRunning) return;
+    setAutoRunning(true);
+    setAutoCount(0);
+    let count = 0;
+
+    // Generate first one immediately
+    const first = generateOne();
+    setGallery((prev) => [first, ...prev]);
+    count++;
+    setAutoCount(count);
+
+    intervalRef.current = setInterval(() => {
+      if (count >= MAX_AUTO) {
+        stopAuto();
+        toast({ title: "Auto-generate complete", description: `Generated ${MAX_AUTO} prompts.` });
+        return;
+      }
+      const content = generateOne();
+      setGallery((prev) => [content, ...prev]);
+      count++;
+      setAutoCount(count);
+    }, 60000);
+  }, [autoRunning, generateOne, stopAuto]);
+
+  const handleReset = () => {
+    stopAuto();
+    setGallery([]);
+    setAutoCount(0);
+    toast({ title: "Reset", description: "Gallery cleared and auto-generate stopped." });
+  };
 
   const handlePublish = (content: GeneratedContent) => {
     setGallery((prev) => [content, ...prev]);
@@ -47,6 +104,24 @@ const Index = () => {
           </button>
         </div>
       </nav>
+
+      {/* Auto-generate controls */}
+      <div className="max-w-2xl mx-auto px-4 pt-6">
+        <div className="flex items-center justify-center gap-3 p-3 rounded-lg bg-card border border-border">
+          {!autoRunning ? (
+            <Button onClick={startAuto} variant="outline" size="sm" className="font-mono text-xs gap-2">
+              <Play className="w-3 h-3" /> Start Auto (1/min, max {MAX_AUTO})
+            </Button>
+          ) : (
+            <Button onClick={stopAuto} variant="destructive" size="sm" className="font-mono text-xs gap-2">
+              <Square className="w-3 h-3" /> Stop ({autoCount}/{MAX_AUTO})
+            </Button>
+          )}
+          <Button onClick={handleReset} variant="ghost" size="sm" className="font-mono text-xs gap-2">
+            <RotateCcw className="w-3 h-3" /> Reset All
+          </Button>
+        </div>
+      </div>
 
       {/* Content */}
       <main className="max-w-2xl mx-auto px-4 py-8">
