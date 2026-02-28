@@ -1,0 +1,73 @@
+import { Heart, MessageCircle, Share2, Bookmark } from "lucide-react";
+import { useState } from "react";
+import type { GeneratedContent } from "@/lib/cinematic-data";
+
+interface GalleryCardProps {
+  content: GeneratedContent;
+}
+
+export function GalleryCard({ content }: GalleryCardProps) {
+  const [liked, setLiked] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const likes = Math.floor(Math.random() * 500) + 50;
+
+  return (
+    <div className="bg-card rounded-lg overflow-hidden film-border animate-fade-up">
+      {/* Header */}
+      <div className="flex items-center gap-3 p-3">
+        <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm">
+          {content.style.icon}
+        </div>
+        <div>
+          <div className="font-mono text-xs font-bold text-foreground">cine.machine</div>
+          <div className="text-[10px] text-muted-foreground">{content.style.label}</div>
+        </div>
+      </div>
+
+      {/* Image */}
+      {content.imageUrl ? (
+        <img src={content.imageUrl} alt={content.prompt} className="w-full aspect-video object-cover" />
+      ) : (
+        <div className="w-full aspect-video bg-secondary flex items-center justify-center">
+          <span className="text-4xl">{content.style.icon}</span>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setLiked(!liked)} className="transition-transform hover:scale-110">
+              <Heart
+                className={`w-5 h-5 ${liked ? "fill-accent text-accent" : "text-foreground"}`}
+              />
+            </button>
+            <MessageCircle className="w-5 h-5 text-foreground cursor-pointer hover:text-primary transition-colors" />
+            <Share2 className="w-5 h-5 text-foreground cursor-pointer hover:text-primary transition-colors" />
+          </div>
+          <button onClick={() => setSaved(!saved)} className="transition-transform hover:scale-110">
+            <Bookmark className={`w-5 h-5 ${saved ? "fill-primary text-primary" : "text-foreground"}`} />
+          </button>
+        </div>
+
+        <div className="font-mono text-xs text-foreground font-bold">
+          {(liked ? likes + 1 : likes).toLocaleString()} likes
+        </div>
+
+        <p className="text-xs text-foreground/80 whitespace-pre-line leading-relaxed line-clamp-3">
+          {content.socialDescription}
+        </p>
+
+        <div className="flex flex-wrap gap-1">
+          {content.tags.slice(0, 4).map((tag) => (
+            <span key={tag} className="text-[10px] text-primary font-mono">{tag}</span>
+          ))}
+        </div>
+
+        <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+          {content.createdAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+        </div>
+      </div>
+    </div>
+  );
+}
