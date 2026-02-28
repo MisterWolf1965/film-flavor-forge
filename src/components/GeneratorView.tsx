@@ -5,6 +5,7 @@ import { StyleSelector } from "./StyleSelector";
 import { GenerationProgress } from "./GenerationProgress";
 import { PromptDisplay } from "./PromptDisplay";
 import { generatePrompt, type CinematicStyle, type GeneratedContent } from "@/lib/cinematic-data";
+import { supabase } from "@/integrations/supabase/client";
 
 interface GeneratorViewProps {
   onPublish: (content: GeneratedContent) => void;
@@ -28,11 +29,18 @@ export function GeneratorView({ onPublish }: GeneratorViewProps) {
     const result = generatePrompt(selectedStyle);
 
     setCurrentStep(1);
-    // Step 1: "Generate" image (simulated)
-    await new Promise((r) => setTimeout(r, 1500));
-
-    // Use a placeholder cinematic image
-    const imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
+    // Step 1: Generate image with AI
+    let imageUrl: string | undefined;
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-image", {
+        body: { prompt: result.imagePrompt },
+      });
+      if (error) throw error;
+      imageUrl = data?.imageUrl;
+    } catch (err) {
+      console.error("Image generation failed, using placeholder:", err);
+      imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
+    }
 
     setCurrentStep(2);
     // Step 2: Social copy (already generated)

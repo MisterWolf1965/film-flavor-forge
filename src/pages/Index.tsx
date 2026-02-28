@@ -5,6 +5,7 @@ import { GalleryView } from "@/components/GalleryView";
 import { Button } from "@/components/ui/button";
 import { STYLES, generatePrompt, type GeneratedContent } from "@/lib/cinematic-data";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const MAX_AUTO = 20;
 
@@ -21,13 +22,26 @@ const Index = () => {
     setAutoRunning(false);
   }, []);
 
-  const generateOne = useCallback(() => {
+  const generateOne = useCallback(async () => {
     const style = STYLES[Math.floor(Math.random() * STYLES.length)];
     const result = generatePrompt(style);
+    
+    let imageUrl: string | undefined;
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-image", {
+        body: { prompt: result.imagePrompt },
+      });
+      if (error) throw error;
+      imageUrl = data?.imageUrl;
+    } catch (err) {
+      console.error("Image generation failed, using placeholder:", err);
+      imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
+    }
+
     const content: GeneratedContent = {
       ...result,
       id: crypto.randomUUID(),
-      imageUrl: `https://picsum.photos/seed/${Date.now()}/800/450`,
+      imageUrl,
       createdAt: new Date(),
     };
     return content;
@@ -39,23 +53,24 @@ const Index = () => {
     setAutoCount(0);
     let count = 0;
 
-    // Generate first one immediately
-    const first = generateOne();
-    setGallery((prev) => [first, ...prev]);
-    count++;
-    setAutoCount(count);
-
-    intervalRef.current = setInterval(() => {
+    const runOne = async () => {
       if (count >= MAX_AUTO) {
         stopAuto();
         toast({ title: "Auto-generate complete", description: `Generated ${MAX_AUTO} prompts.` });
         return;
       }
-      const content = generateOne();
+      const content = await generateOne();
       setGallery((prev) => [content, ...prev]);
       count++;
       setAutoCount(count);
-    }, 5000);
+    };
+
+    // Generate first one immediately
+    runOne();
+
+    intervalRef.current = setInterval(() => {
+      runOne();
+    }, 15000);
   }, [autoRunning, generateOne, stopAuto]);
 
   const handleReset = () => {
