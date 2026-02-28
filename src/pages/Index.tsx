@@ -55,7 +55,7 @@ const Index = () => {
       setGallery((prev) => [content, ...prev]);
       count++;
       setAutoCount(count);
-    }, 60000);
+    }, 5000);
   }, [autoRunning, generateOne, stopAuto]);
 
   const handleReset = () => {
