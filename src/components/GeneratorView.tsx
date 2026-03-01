@@ -43,11 +43,11 @@ export function GeneratorView({ onPublish }: GeneratorViewProps) {
     }
 
     setCurrentStep(2);
-    // Step 2: Social copy (already generated)
+    // Step 2: Meta description (already generated)
     await new Promise((r) => setTimeout(r, 600));
 
     setCurrentStep(3);
-    // Step 3: Ready to publish
+    // Step 3: Send to platform
     await new Promise((r) => setTimeout(r, 400));
 
     const content: GeneratedContent = {
@@ -114,7 +114,7 @@ export function GeneratorView({ onPublish }: GeneratorViewProps) {
               className="bg-accent text-accent-foreground hover:bg-accent/90 font-mono text-sm px-8 py-5"
             >
               <Clapperboard className="w-4 h-4 mr-2" />
-              Publish to Gallery
+              Send to Platform
             </Button>
           </div>
         </div>
