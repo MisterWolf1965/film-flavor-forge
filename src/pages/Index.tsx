@@ -139,7 +139,7 @@ const Index = () => {
       </div>
 
       {/* Content */}
-      <main className="max-w-2xl mx-auto px-4 py-8">
+      <main className="max-w-2xl mx-auto px-4 py-8 border border-border rounded-lg my-6">
         {tab === "generate" ? (
           <GeneratorView onPublish={handlePublish} />
         ) : (
