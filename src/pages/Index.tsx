@@ -116,8 +116,8 @@ const Index = () => {
       </nav>
 
       {/* Auto-generate controls */}
-      <div className="max-w-2xl mx-auto px-4 pt-6">
-        <div className="flex items-center justify-center gap-3 p-3 rounded-lg border border-border bg-slate-950">
+      <div className="max-w-2xl mx-auto pt-6 py-0 px-0">
+        <div className="flex items-center justify-center p-3 rounded-lg border border-border bg-slate-950 gap-[12px]">
           {!autoRunning ?
           <Button onClick={startAuto} variant="outline" size="sm" className="font-mono text-xs gap-2">
               <Play className="w-3 h-3" /> Start Auto (1/min, max {MAX_AUTO})
