@@ -27,8 +27,8 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
-        <h1 className="text-3xl md:text-4xl font-mono font-bold text-gradient-gold tracking-tight">
-          CINE.MACHINE
+        <h1 className="text-3xl text-gradient-gold tracking-tight md:text-3xl font-medium font-sans">
+          Cinematic Social Workflow
         </h1>
         <p className="text-sm text-muted-foreground font-mono">
           Random cinematic prompts for micro short films
@@ -36,6 +36,6 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
       </div>
 
       <GenerationProgress currentStep={currentStep} isActive={autoRunning} />
-    </div>
-  );
+    </div>);
+
 }
