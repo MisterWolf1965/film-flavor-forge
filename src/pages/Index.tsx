@@ -7,7 +7,7 @@ import { STYLES, generatePrompt, type GeneratedContent } from "@/lib/cinematic-d
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-const MAX_AUTO = 20;
+const MAX_AUTO = 10;
 
 const Index = () => {
   const [tab, setTab] = useState<"generate" | "gallery">("generate");
@@ -110,7 +110,7 @@ const Index = () => {
             }`}
           >
             <LayoutGrid className="w-4 h-4" />
-            Gallery
+            Platform
             {gallery.length > 0 && (
               <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center">
                 {gallery.length}

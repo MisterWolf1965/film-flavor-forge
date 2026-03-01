@@ -1,10 +1,10 @@
 import { Progress } from "@/components/ui/progress";
 
 const STEPS = [
-  { label: "Generating prompt", icon: "✍️" },
-  { label: "Creating image", icon: "🎨" },
-  { label: "Writing social copy", icon: "📝" },
-  { label: "Publishing to gallery", icon: "🎬" },
+  { label: "Random prompt", icon: "🎲" },
+  { label: "Generate image", icon: "🎨" },
+  { label: "Meta description", icon: "📝" },
+  { label: "Send to Platform", icon: "🚀" },
 ];
 
 interface GenerationProgressProps {
