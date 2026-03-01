@@ -13,7 +13,6 @@ interface GenerationProgressProps {
 }
 
 export function GenerationProgress({ currentStep, isActive }: GenerationProgressProps) {
-  if (!isActive && currentStep < 0) return null;
 
   const progress = currentStep >= STEPS.length ? 100 : ((currentStep + 1) / STEPS.length) * 100;
 

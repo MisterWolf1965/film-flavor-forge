@@ -79,20 +79,8 @@ export function GeneratorView({ onPublish }: GeneratorViewProps) {
         </p>
       </div>
 
-      {/* Progress Bar - replaces style selector area */}
+      {/* Progress Bar - always visible */}
       <GenerationProgress currentStep={currentStep} isActive={isGenerating || currentStep >= 0} />
-
-      {/* Generate Button */}
-      <div className="flex justify-center">
-        <Button
-          onClick={handleGenerate}
-          disabled={isGenerating}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 font-mono text-sm px-8 py-5 glow-gold disabled:opacity-30"
-        >
-          <Shuffle className="w-4 h-4 mr-2" />
-          {isGenerating ? "Generating..." : "Generate Prompt"}
-        </Button>
-      </div>
 
       {/* Result */}
       {generated && (
