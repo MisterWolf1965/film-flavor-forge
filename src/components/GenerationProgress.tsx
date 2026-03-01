@@ -13,21 +13,20 @@ interface GenerationProgressProps {
 }
 
 export function GenerationProgress({ currentStep, isActive }: GenerationProgressProps) {
-
-  const progress = currentStep >= STEPS.length ? 100 : ((currentStep + 1) / STEPS.length) * 100;
+  const progress = currentStep < 0 ? 0 : currentStep >= STEPS.length ? 100 : ((currentStep + 1) / STEPS.length) * 100;
 
   return (
-    <div className="space-y-4 animate-fade-up">
+    <div className="space-y-4">
       <Progress value={progress} className="h-1.5 bg-secondary [&>div]:bg-primary" />
       <div className="grid grid-cols-4 gap-2">
         {STEPS.map((step, i) => {
           const isDone = currentStep > i;
-          const isCurrent = currentStep === i;
+          const isCurrent = currentStep === i && isActive;
           return (
             <div
               key={step.label}
               className={`flex flex-col items-center gap-1.5 transition-all duration-500 ${
-                isDone ? "opacity-100" : isCurrent ? "opacity-100" : "opacity-30"
+                isDone ? "opacity-100" : isCurrent ? "opacity-100" : "opacity-40"
               }`}
             >
               <div
@@ -41,7 +40,7 @@ export function GenerationProgress({ currentStep, isActive }: GenerationProgress
               >
                 {isDone ? "✓" : step.icon}
               </div>
-              <span className="text-[10px] font-mono text-muted-foreground text-center leading-tight">
+              <span className="text-[10px] font-mono text-foreground text-center leading-tight">
                 {step.label}
               </span>
             </div>
