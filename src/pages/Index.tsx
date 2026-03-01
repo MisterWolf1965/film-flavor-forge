@@ -80,11 +80,6 @@ const Index = () => {
     toast({ title: "Reset", description: "Gallery cleared and auto-generate stopped." });
   };
 
-  const handlePublish = (content: GeneratedContent) => {
-    setGallery((prev) => [content, ...prev]);
-    setTab("gallery");
-  };
-
   return (
     <div className="min-h-screen bg-background">
       {/* Nav */}
@@ -141,7 +136,7 @@ const Index = () => {
       {/* Content */}
       <main className="max-w-2xl mx-auto px-4 py-8 border border-border rounded-lg my-6">
         {tab === "generate" ? (
-          <GeneratorView onPublish={handlePublish} />
+          <GeneratorView autoRunning={autoRunning} />
         ) : (
           <GalleryView items={gallery} />
         )}
