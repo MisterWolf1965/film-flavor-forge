@@ -19,7 +19,7 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
     const timer = setInterval(() => {
       step = (step + 1) % 4;
       setCurrentStep(step);
-    }, 900);
+    }, 3750);
 
     return () => clearInterval(timer);
   }, [autoRunning]);
