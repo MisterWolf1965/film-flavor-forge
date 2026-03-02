@@ -8,6 +8,7 @@ export type CinematicStyle = {
   subjects: string[];
   locations: string[];
   actions: string[];
+  skits: string[];
   tags: string[];
 };
 
@@ -22,6 +23,13 @@ export const STYLES: CinematicStyle[] = [
     subjects: ["a disgraced detective", "a street hustler", "a burned-out journalist", "a taxi driver", "a corrupt politician"],
     locations: ["a rain-soaked alley", "a decrepit motel room", "under a flickering subway light", "a smoky dive bar", "an abandoned parking garage"],
     actions: ["lights a cigarette and stares into the void", "counts crumpled bills under a bare bulb", "pushes through a crowd of faceless strangers", "wipes blood from their lip"],
+    skits: [
+      "Man waits at a phone booth. Phone rings. He doesn't answer.",
+      "Detective sits in a parked car. Wipes the rearview mirror. Sees his own bloodshot eyes.",
+      "A woman drops a bag of cash on a diner counter. Walks out. No one moves.",
+      "Taxi idles at a red light. Driver stares at an empty backseat. Locks the doors.",
+      "Man lights a match in a dark hallway. Sees a face. Blows it out.",
+    ],
     tags: ["#70scinema", "#grittyfilm", "#neonnoir", "#analogfilm", "#cinematic", "#microshort"],
   },
   {
@@ -34,6 +42,13 @@ export const STYLES: CinematicStyle[] = [
     subjects: ["two strangers", "a lonely musician", "a night-shift worker", "a wandering poet", "a foreign tourist"],
     locations: ["a near-empty diner at 3AM", "a Memphis motel lobby", "a park bench in winter", "a laundromat", "a bus stop in the rain"],
     actions: ["share an awkward silence over coffee", "stares out a rain-streaked window", "reads a crumpled letter aloud to no one", "waits for something that never comes"],
+    skits: [
+      "Two strangers sit in a diner. One opens their mouth. Closes it. They both stare at the salt shaker.",
+      "Man plays guitar on a fire escape. String breaks. He keeps strumming.",
+      "Woman at a bus stop reads a postcard. Flips it. Blank. She smiles.",
+      "Night-shift worker mops a floor. Reflection stares back. He waves at it.",
+      "Poet writes a word on a napkin. Crumples it. Orders another coffee.",
+    ],
     tags: ["#jarmusch", "#indiefilm", "#deadpan", "#blackandwhite", "#artcinema", "#microshort"],
   },
   {
@@ -46,6 +61,13 @@ export const STYLES: CinematicStyle[] = [
     subjects: ["a lone figure in a trench coat", "a hacker", "a heartbroken singer", "a yakuza deserter", "a sleepless photographer"],
     locations: ["Shinjuku's neon alleys", "a capsule hotel", "a rooftop overlooking Shibuya", "an underground ramen bar", "a rain-blurred crosswalk"],
     actions: ["disappears into a crowd of umbrellas", "traces kanji on a foggy window", "receives a cryptic text message", "walks endlessly through neon corridors"],
+    skits: [
+      "Man rides by on a motorcycle. Woman watches from a window. He looks into the stormy sky.",
+      "Figure stands at a crosswalk. Hundreds pass. Signal changes. They don't move.",
+      "Hacker closes a laptop. Neon sign outside flickers. Same message on both screens.",
+      "Singer hums into a dead microphone. The empty bar listens anyway.",
+      "Photographer snaps a photo. Checks the screen. Someone in the frame wasn't there before.",
+    ],
     tags: ["#tokyonoir", "#neoncinema", "#cyberpunk", "#nightcity", "#japanfilm", "#microshort"],
   },
   {
@@ -58,6 +80,13 @@ export const STYLES: CinematicStyle[] = [
     subjects: ["a squatter artist", "a reunification kid", "a raver", "a street poet", "an ex-Stasi informant"],
     locations: ["an abandoned factory turned club", "a crumbling courtyard", "a rooftop squat", "Mauerpark at dawn", "a graffiti-covered stairwell"],
     actions: ["spray-paints a wall with their manifesto", "dances alone in an empty warehouse", "shares a cigarette on a fire escape", "stares at the wall's remains"],
+    skits: [
+      "Kid sits on the Wall. Legs dangling both sides. East. West. Doesn't choose.",
+      "Raver exits a club at dawn. Birds singing. Bass still ringing in their ears.",
+      "Artist paints over a hammer-and-sickle mural. Steps back. It's a flower.",
+      "Two strangers share a cigarette on rubble. Neither speaks German.",
+      "Poet tapes a page to a lamppost. Wind takes it. They tape another.",
+    ],
     tags: ["#berlin90s", "#prenzlauerberg", "#postwall", "#techno", "#undergroundfilm", "#microshort"],
   },
   {
@@ -70,6 +99,13 @@ export const STYLES: CinematicStyle[] = [
     subjects: ["a road warrior", "a scavenger child", "a war-painted warlord", "a mute drifter", "a fuel-hoarding hermit"],
     locations: ["an endless desert highway", "a wrecked tanker fortress", "a dried-out riverbed", "a rusted vehicle graveyard", "a sandstorm's eye"],
     actions: ["revs a war-rig engine and screams into dust", "trades bullets for water", "paints their face for the final ride", "watches the horizon burn"],
+    skits: [
+      "Child finds a working radio in the wreckage. Music plays. They've never heard music before.",
+      "Drifter pours the last water into the sand. Watches it vanish. Keeps walking.",
+      "Warlord removes war paint in a broken mirror. Underneath, just a tired old man.",
+      "Two strangers trade a bullet for a can of peaches. Neither trusts the other. Both eat.",
+      "Hermit starts the engine. It roars. Fuel gauge reads empty. He drives anyway.",
+    ],
     tags: ["#postapocalyptic", "#madmax", "#furyroad", "#desertcinema", "#survivalfilm", "#microshort"],
   },
   {
@@ -82,6 +118,13 @@ export const STYLES: CinematicStyle[] = [
     subjects: ["a lone crew member", "an android with a secret", "a biologist studying a specimen", "a navigator losing sanity", "a corporate officer"],
     locations: ["a derelict spacecraft corridor", "a cryo-chamber", "the bridge of a deep-space freighter", "an alien egg chamber", "an observation deck facing the void"],
     actions: ["hears something breathing in the vents", "watches a blip approach on radar", "opens a door that should have stayed sealed", "floats in zero gravity, alone"],
+    skits: [
+      "Crew member eats alone in the mess hall. Fork scrapes plate. Something scrapes back from inside the wall.",
+      "Android reads a book. Turns to the last page. Tears it out. Eats it.",
+      "Navigator stares at the star map. One star blinks. Stars don't blink.",
+      "Biologist opens specimen jar. Empty. Jar was full a minute ago.",
+      "Officer records a log. Plays it back. A second voice is on the tape.",
+    ],
     tags: ["#scifi", "#alienfilm", "#cosmichorror", "#spacecinema", "#retroscifi", "#microshort"],
   },
 ];
@@ -96,6 +139,7 @@ export function generatePrompt(style: CinematicStyle) {
   const subject = pick(style.subjects);
   const location = pick(style.locations);
   const action = pick(style.actions);
+  const skit = pick(style.skits);
 
   const prompt = `${visual}. ${subject} in ${location} ${action}. The mood is ${mood}.`;
 
@@ -103,7 +147,7 @@ export function generatePrompt(style: CinematicStyle) {
 
   const socialDescription = `🎬 ${style.icon} ${style.label} | A micro short film moment.\n\n"${subject} in ${location}... ${action}."\n\nShot in ${visual} style. The air is thick with ${mood} energy.\n\n${style.tags.join(" ")}`;
 
-  return { prompt, imagePrompt, socialDescription, tags: style.tags, style };
+  return { prompt, imagePrompt, socialDescription, tags: style.tags, style, skit };
 }
 
 export type GeneratedContent = ReturnType<typeof generatePrompt> & {
