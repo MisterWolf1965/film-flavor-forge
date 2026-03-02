@@ -41,10 +41,15 @@ const Index = () => {
         throw error;
       }
       if (data?.error) {
-        toast({ title: "Generation Error", description: data.error, variant: "destructive" });
-        throw new Error(data.error);
+        toast({ title: "Generation Notice", description: data.error, variant: "destructive" });
+        if (data?.recoverable) {
+          imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
+        } else {
+          throw new Error(data.error);
+        }
+      } else {
+        imageUrl = data?.imageUrl;
       }
-      imageUrl = data?.imageUrl;
     } catch (err) {
       console.error("Image generation failed, using placeholder:", err);
       imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
