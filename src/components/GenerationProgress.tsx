@@ -12,7 +12,7 @@ const STEPS = [
 interface GenerationProgressProps {
   currentStep: number;
   isActive: boolean;
-  skitStyle?: { label: string; icon: string; description: string };
+  skitStyle?: { label: string; icon: string; description: string; skit: string };
   promptText?: string;
   imageUrl?: string;
   metaDescription?: string;
@@ -71,46 +71,37 @@ export function GenerationProgress({
       {/* Step detail panel */}
       {isActive && currentStep >= 0 && (
         <div className="mt-4 rounded-lg border border-border bg-secondary/30 p-4 min-h-[120px] flex items-center justify-center animate-fade-in">
-          {currentStep === 0 && (
-            <StepSkit style={skitStyle} />
-          )}
-          {currentStep === 1 && (
-            <StepPrompt text={promptText} />
-          )}
-          {currentStep === 2 && (
-            <StepImage url={imageUrl} />
-          )}
-          {currentStep === 3 && (
-            <StepMeta description={metaDescription} tags={tags} />
-          )}
-          {currentStep === 4 && (
-            <StepSend />
-          )}
+          {currentStep === 0 && <StepSkit style={skitStyle} />}
+          {currentStep === 1 && <StepPrompt text={promptText} />}
+          {currentStep === 2 && <StepImage url={imageUrl} />}
+          {currentStep === 3 && <StepMeta description={metaDescription} tags={tags} />}
+          {currentStep === 4 && <StepSend />}
         </div>
       )}
     </div>
   );
 }
 
-function StepSkit({ style }: { style?: { label: string; icon: string; description: string } }) {
+function StepSkit({ style }: { style?: { label: string; icon: string; description: string; skit: string } }) {
   return (
     <div className="w-full space-y-3 animate-fade-in">
-      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Selecting Random Skit</p>
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-lg animate-pulse">
+      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Random Skit Selected</p>
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 shrink-0 rounded-full bg-primary/20 flex items-center justify-center text-lg animate-pulse">
           {style?.icon || "🎬"}
         </div>
-        <div>
-          <p className="text-sm font-mono text-foreground font-medium">{style?.label || "..."}</p>
-          <p className="text-[11px] font-mono text-muted-foreground">{style?.description || "Rolling the dice..."}</p>
+        <div className="space-y-1.5">
+          <p className="text-xs font-mono text-primary font-medium">{style?.label || "..."}</p>
+          <p className="text-[11px] font-mono text-foreground leading-relaxed italic">
+            "{style?.skit || "Rolling the dice..."}"
+          </p>
         </div>
       </div>
-      <div className="flex gap-1.5">
-        {["🎞️", "☕", "🌃", "🏚️", "🔥", "👾"].map((icon, i) => (
+      <div className="flex gap-1.5 pt-1">
+        {["🎞️", "☕", "🌃", "🏚️", "🔥", "👾"].map((icon) => (
           <span
             key={icon}
-            className="text-sm opacity-30 animate-pulse"
-            style={{ animationDelay: `${i * 0.2}s` }}
+            className={`text-sm transition-all duration-500 ${icon === style?.icon ? "opacity-100 scale-125" : "opacity-20"}`}
           >
             {icon}
           </span>
@@ -186,7 +177,6 @@ function StepSend() {
     <div className="w-full flex flex-col items-center gap-3 animate-fade-in">
       <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Sending to Platform</p>
       <div className="relative flex items-center justify-center gap-4">
-        {/* Package icon animating into send */}
         <div className="animate-[packageSlide_2s_ease-in-out_infinite]">
           <Package className="w-6 h-6 text-primary" />
         </div>
