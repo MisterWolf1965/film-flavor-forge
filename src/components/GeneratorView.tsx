@@ -35,7 +35,7 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
-        <h1 className="text-3xl text-gradient-gold tracking-tight md:text-3xl font-medium text-popover-foreground font-serif letter-spacing:2px">
+        <h1 className="text-3xl text-gradient-gold tracking-tight md:text-3xl font-medium font-serif letter-spacing:2px text-slate-200">
           Cinematic Social Workflow
         </h1>
         <p className="text-sm text-muted-foreground font-mono">
