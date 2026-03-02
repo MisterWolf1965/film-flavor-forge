@@ -2,7 +2,8 @@ import { Progress } from "@/components/ui/progress";
 import { Package, Send } from "lucide-react";
 
 const STEPS = [
-  { label: "Random prompt", icon: "🎲" },
+  { label: "Random skit", icon: "🎬" },
+  { label: "Generate prompt", icon: "🎲" },
   { label: "Generate image", icon: "🎨" },
   { label: "Meta description", icon: "📝" },
   { label: "Send to Platform", icon: "🚀" },
@@ -11,6 +12,7 @@ const STEPS = [
 interface GenerationProgressProps {
   currentStep: number;
   isActive: boolean;
+  skitStyle?: { label: string; icon: string; description: string };
   promptText?: string;
   imageUrl?: string;
   metaDescription?: string;
@@ -20,6 +22,7 @@ interface GenerationProgressProps {
 export function GenerationProgress({
   currentStep,
   isActive,
+  skitStyle,
   promptText,
   imageUrl,
   metaDescription,
@@ -35,7 +38,7 @@ export function GenerationProgress({
   return (
     <div className="space-y-4">
       <Progress value={progress} className="h-1.5 bg-secondary [&>div]:bg-primary" />
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-5 gap-2">
         {STEPS.map((step, i) => {
           const isDone = currentStep > i;
           const isCurrent = currentStep === i && isActive;
@@ -69,19 +72,50 @@ export function GenerationProgress({
       {isActive && currentStep >= 0 && (
         <div className="mt-4 rounded-lg border border-border bg-secondary/30 p-4 min-h-[120px] flex items-center justify-center animate-fade-in">
           {currentStep === 0 && (
-            <StepPrompt text={promptText} />
+            <StepSkit style={skitStyle} />
           )}
           {currentStep === 1 && (
-            <StepImage url={imageUrl} />
+            <StepPrompt text={promptText} />
           )}
           {currentStep === 2 && (
-            <StepMeta description={metaDescription} tags={tags} />
+            <StepImage url={imageUrl} />
           )}
           {currentStep === 3 && (
+            <StepMeta description={metaDescription} tags={tags} />
+          )}
+          {currentStep === 4 && (
             <StepSend />
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function StepSkit({ style }: { style?: { label: string; icon: string; description: string } }) {
+  return (
+    <div className="w-full space-y-3 animate-fade-in">
+      <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Selecting Random Skit</p>
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-lg animate-pulse">
+          {style?.icon || "🎬"}
+        </div>
+        <div>
+          <p className="text-sm font-mono text-foreground font-medium">{style?.label || "..."}</p>
+          <p className="text-[11px] font-mono text-muted-foreground">{style?.description || "Rolling the dice..."}</p>
+        </div>
+      </div>
+      <div className="flex gap-1.5">
+        {["🎞️", "☕", "🌃", "🏚️", "🔥", "👾"].map((icon, i) => (
+          <span
+            key={icon}
+            className="text-sm opacity-30 animate-pulse"
+            style={{ animationDelay: `${i * 0.2}s` }}
+          >
+            {icon}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

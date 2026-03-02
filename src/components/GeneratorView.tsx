@@ -25,9 +25,9 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
     setCurrentStep(0);
     let step = 0;
     const timer = setInterval(() => {
-      step = (step + 1) % 4;
+      step = (step + 1) % 5;
       setCurrentStep(step);
-    }, 3750);
+    }, 3000);
 
     return () => clearInterval(timer);
   }, [autoRunning]);
@@ -46,6 +46,7 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
       <GenerationProgress
         currentStep={currentStep}
         isActive={autoRunning}
+        skitStyle={sampleData?.style ? { label: sampleData.style.label, icon: sampleData.style.icon, description: sampleData.style.description } : undefined}
         promptText={sampleData?.prompt}
         imageUrl={`https://picsum.photos/seed/${Date.now()}/800/450`}
         metaDescription={sampleData?.socialDescription}
