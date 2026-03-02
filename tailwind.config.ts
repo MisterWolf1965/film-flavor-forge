@@ -97,20 +97,24 @@ export default {
   		},
   		keyframes: {
   			'accordion-down': {
-  				from: {
-  					height: '0'
-  				},
-  				to: {
-  					height: 'var(--radix-accordion-content-height)'
-  				}
+  				from: { height: '0' },
+  				to: { height: 'var(--radix-accordion-content-height)' }
   			},
   			'accordion-up': {
-  				from: {
-  					height: 'var(--radix-accordion-content-height)'
-  				},
-  				to: {
-  					height: '0'
-  				}
+  				from: { height: 'var(--radix-accordion-content-height)' },
+  				to: { height: '0' }
+  			},
+  			'shimmer': {
+  				'0%': { transform: 'translateX(-100%)' },
+  				'100%': { transform: 'translateX(200%)' }
+  			},
+  			'packageSlide': {
+  				'0%, 100%': { transform: 'translateX(0) scale(1)', opacity: '1' },
+  				'50%': { transform: 'translateX(16px) scale(0.9)', opacity: '0.6' }
+  			},
+  			'dotPulse': {
+  				'0%, 100%': { opacity: '0.3', transform: 'scale(0.8)' },
+  				'50%': { opacity: '1', transform: 'scale(1.2)' }
   			}
   		},
   		animation: {

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { GenerationProgress } from "./GenerationProgress";
+import { STYLES, generatePrompt } from "@/lib/cinematic-data";
 
 interface GeneratorViewProps {
   autoRunning: boolean;
@@ -7,6 +8,13 @@ interface GeneratorViewProps {
 
 export function GeneratorView({ autoRunning }: GeneratorViewProps) {
   const [currentStep, setCurrentStep] = useState(-1);
+
+  // Generate a sample prompt to display in step panels
+  const sampleData = useMemo(() => {
+    if (!autoRunning) return null;
+    const style = STYLES[Math.floor(Math.random() * STYLES.length)];
+    return generatePrompt(style);
+  }, [autoRunning, currentStep < 0]); // regenerate when restarted
 
   useEffect(() => {
     if (!autoRunning) {
@@ -35,7 +43,14 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
         </p>
       </div>
 
-      <GenerationProgress currentStep={currentStep} isActive={autoRunning} />
-    </div>);
-
+      <GenerationProgress
+        currentStep={currentStep}
+        isActive={autoRunning}
+        promptText={sampleData?.prompt}
+        imageUrl={`https://picsum.photos/seed/${Date.now()}/800/450`}
+        metaDescription={sampleData?.socialDescription}
+        tags={sampleData?.tags}
+      />
+    </div>
+  );
 }
