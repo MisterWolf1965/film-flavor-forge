@@ -25,9 +25,9 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
     setCurrentStep(0);
     let step = 0;
     const timer = setInterval(() => {
-      step = (step + 1) % 5;
+      step = (step + 1) % 4;
       setCurrentStep(step);
-    }, 3000);
+    }, 3750);
 
     return () => clearInterval(timer);
   }, [autoRunning]);
@@ -35,7 +35,7 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
   return (
     <div className="space-y-8">
       <div className="text-center space-y-2">
-        <h1 className="text-3xl text-gradient-gold tracking-tight md:text-3xl font-medium font-sans text-secondary-foreground">
+        <h1 className="text-3xl text-gradient-gold tracking-tight md:text-3xl font-medium text-popover-foreground font-serif letter-spacing:2px">
           Cinematic Social Workflow
         </h1>
         <p className="text-sm text-muted-foreground font-mono">
@@ -46,12 +46,11 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
       <GenerationProgress
         currentStep={currentStep}
         isActive={autoRunning}
-        skitStyle={sampleData?.style ? { label: sampleData.style.label, icon: sampleData.style.icon, description: sampleData.style.description, skit: sampleData.skit } : undefined}
         promptText={sampleData?.prompt}
         imageUrl={`https://picsum.photos/seed/${Date.now()}/800/450`}
         metaDescription={sampleData?.socialDescription}
-        tags={sampleData?.tags}
-      />
-    </div>
-  );
+        tags={sampleData?.tags} />
+
+    </div>);
+
 }
