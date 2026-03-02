@@ -31,7 +31,19 @@ const Index = () => {
       const { data, error } = await supabase.functions.invoke("generate-image", {
         body: { prompt: result.imagePrompt }
       });
-      if (error) throw error;
+      if (error) {
+        // Check for credit/rate-limit errors from the response
+        if (error.message?.includes("402") || error.message?.includes("credits")) {
+          toast({ title: "AI Credits Exhausted", description: "Please add credits in Settings → Workspace → Usage.", variant: "destructive" });
+        } else if (error.message?.includes("429")) {
+          toast({ title: "Rate Limited", description: "Too many requests. Please wait a moment.", variant: "destructive" });
+        }
+        throw error;
+      }
+      if (data?.error) {
+        toast({ title: "Generation Error", description: data.error, variant: "destructive" });
+        throw new Error(data.error);
+      }
       imageUrl = data?.imageUrl;
     } catch (err) {
       console.error("Image generation failed, using placeholder:", err);
