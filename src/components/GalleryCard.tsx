@@ -33,6 +33,15 @@ export function GalleryCard({ content }: GalleryCardProps) {
         </div>
       )}
 
+      {/* Skit */}
+      {content.skit && (
+        <div className="mx-3 mt-3 p-3 rounded bg-secondary/50 border-l-2 border-primary/40">
+          <p className="font-mono text-xs italic text-foreground/90 leading-relaxed">
+            🎬 {content.skit}
+          </p>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="p-3 space-y-2">
         <div className="flex items-center justify-between">
@@ -54,7 +63,7 @@ export function GalleryCard({ content }: GalleryCardProps) {
           {(liked ? likes + 1 : likes).toLocaleString()} likes
         </div>
 
-        <p className="text-xs text-foreground/80 whitespace-pre-line leading-relaxed line-clamp-3">
+        <p className="text-xs text-foreground/80 whitespace-pre-line leading-relaxed">
           {content.socialDescription}
         </p>
 
