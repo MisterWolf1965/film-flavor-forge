@@ -12,9 +12,16 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt } = await req.json();
-    if (!prompt) {
-      return new Response(JSON.stringify({ error: "prompt is required" }), {
+    const body = await req.json();
+    const { prompt, scenes } = body;
+
+    // Support both single prompt and storyboard scenes
+    const finalPrompt = scenes && scenes.length === 4
+      ? `Generate a single image that is a 2x2 cinematic storyboard grid. Each quadrant is a separate scene from a micro short film. Label each quadrant S1, S2, S3, S4 in small text in the corner.\n\nTop-left (S1): ${scenes[0]}\nTop-right (S2): ${scenes[1]}\nBottom-left (S3): ${scenes[2]}\nBottom-right (S4): ${scenes[3]}\n\nMake it look like a professional film storyboard with thin black borders between panels. Cinematic aspect ratio, dramatic lighting, ultra high resolution.`
+      : prompt;
+
+    if (!finalPrompt) {
+      return new Response(JSON.stringify({ error: "prompt or scenes required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -25,7 +32,7 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    console.log("Generating image for prompt:", prompt.substring(0, 100));
+    console.log("Generating image for prompt:", finalPrompt.substring(0, 150));
 
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -40,7 +47,7 @@ serve(async (req) => {
           messages: [
             {
               role: "user",
-              content: prompt,
+              content: finalPrompt,
             },
           ],
           modalities: ["image", "text"],
