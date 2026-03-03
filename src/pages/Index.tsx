@@ -27,31 +27,43 @@ const Index = () => {
     const result = generatePrompt(style);
 
     let imageUrl: string | undefined;
+    let storyboardUrl: string | undefined;
+
     if (useAI) {
-      try {
-        const { data, error } = await supabase.functions.invoke("generate-image", {
+      // Generate both hero image and storyboard in parallel
+      const [heroResult, storyboardResult] = await Promise.allSettled([
+        supabase.functions.invoke("generate-image", {
+          body: { prompt: result.imagePrompt }
+        }),
+        supabase.functions.invoke("generate-image", {
           body: { scenes: result.skit.scenes }
-        });
+        }),
+      ]);
+
+      // Hero image
+      if (heroResult.status === "fulfilled") {
+        const { data, error } = heroResult.value;
         if (error) {
-          if (error.message?.includes("402") || error.message?.includes("credits")) {
-            toast({ title: "AI Credits Exhausted", description: "Please add credits in Settings → Workspace → Usage.", variant: "destructive" });
-          } else if (error.message?.includes("429")) {
-            toast({ title: "Rate Limited", description: "Too many requests. Please wait a moment.", variant: "destructive" });
-          }
-          throw error;
-        }
-        if (data?.error) {
-          toast({ title: "Generation Notice", description: data.error, variant: "destructive" });
+          console.error("Hero image error:", error);
+        } else if (data?.error) {
           if (data?.recoverable) {
             imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
-          } else {
-            throw new Error(data.error);
           }
+          toast({ title: "Generation Notice", description: data.error, variant: "destructive" });
         } else {
           imageUrl = data?.imageUrl;
         }
-      } catch (err) {
-        console.error("Image generation failed, using placeholder:", err);
+      }
+
+      // Storyboard grid
+      if (storyboardResult.status === "fulfilled") {
+        const { data, error } = storyboardResult.value;
+        if (!error && !data?.error) {
+          storyboardUrl = data?.imageUrl;
+        }
+      }
+
+      if (!imageUrl) {
         imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
       }
     } else {
@@ -62,6 +74,7 @@ const Index = () => {
       ...result,
       id: crypto.randomUUID(),
       imageUrl,
+      storyboardUrl,
       createdAt: new Date()
     };
     return content;
