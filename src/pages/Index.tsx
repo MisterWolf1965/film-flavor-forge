@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { Film, LayoutGrid, Play, Square, RotateCcw, Image, Sparkles } from "lucide-react";
+import { Film, LayoutGrid, Play, Square, RotateCcw, ImageIcon, Sparkles } from "lucide-react";
 import { GeneratorView } from "@/components/GeneratorView";
 import { GalleryView } from "@/components/GalleryView";
 import { Button } from "@/components/ui/button";
@@ -145,7 +145,7 @@ const Index = () => {
         <div className="flex flex-wrap items-center justify-center p-3 rounded-lg border border-border bg-background/50 gap-2">
           {/* Single generate buttons */}
           <Button onClick={() => handleGenerateSingle(false)} variant="outline" size="sm" className="font-mono text-xs gap-2">
-            <Image className="w-3 h-3" /> Placeholder
+            <ImageIcon className="w-3 h-3" /> Placeholder
           </Button>
           <Button onClick={() => handleGenerateSingle(true)} variant="default" size="sm" className="font-mono text-xs gap-2">
             <Sparkles className="w-3 h-3" /> Generate AI
