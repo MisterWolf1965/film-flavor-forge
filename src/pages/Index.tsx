@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { Film, LayoutGrid, Play, Square, RotateCcw, ImageIcon, Sparkles } from "lucide-react";
+import { Film, LayoutGrid, Play, Square, RotateCcw, FileImage, Sparkles } from "lucide-react";
 import { GeneratorView } from "@/components/GeneratorView";
 import { GalleryView } from "@/components/GalleryView";
 import { Button } from "@/components/ui/button";
@@ -106,7 +106,7 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-700">
+    <div className="min-h-screen bg-background">
       {/* Nav */}
       <nav className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="max-w-2xl mx-auto flex items-center justify-center gap-1 p-2">
@@ -145,7 +145,7 @@ const Index = () => {
         <div className="flex flex-wrap items-center justify-center p-3 rounded-lg border border-border bg-background/50 gap-2">
           {/* Single generate buttons */}
           <Button onClick={() => handleGenerateSingle(false)} variant="outline" size="sm" className="font-mono text-xs gap-2">
-            <ImageIcon className="w-3 h-3" /> Placeholder
+            <FileImage className="w-3 h-3" /> Placeholder
           </Button>
           <Button onClick={() => handleGenerateSingle(true)} variant="default" size="sm" className="font-mono text-xs gap-2">
             <Sparkles className="w-3 h-3" /> Generate AI
@@ -175,7 +175,7 @@ const Index = () => {
       </div>
 
       {/* Content */}
-      <main className="max-w-2xl mx-auto px-4 py-8 border border-border rounded-lg my-6 bg-slate-950">
+      <main className="max-w-2xl mx-auto px-4 py-8 border border-border rounded-lg my-6 bg-card">
         {tab === "generate" ?
         <GeneratorView autoRunning={autoRunning} /> :
 

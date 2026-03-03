@@ -14,7 +14,7 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
     if (!autoRunning) return null;
     const style = STYLES[Math.floor(Math.random() * STYLES.length)];
     return generatePrompt(style);
-  }, [autoRunning, currentStep < 0]); // regenerate when restarted
+  }, [autoRunning, currentStep]); // regenerate when restarted
 
   useEffect(() => {
     if (!autoRunning) {
