@@ -24,15 +24,6 @@ export function GalleryCard({ content }: GalleryCardProps) {
         </div>
       </div>
 
-      {/* Image */}
-      {content.imageUrl ? (
-        <img src={content.imageUrl} alt={content.prompt} className="w-full aspect-video object-cover" />
-      ) : (
-        <div className="w-full aspect-video bg-secondary flex items-center justify-center">
-          <span className="text-4xl">{content.style.icon}</span>
-        </div>
-      )}
-
       {/* Skit */}
       {content.skit && (
         <div className="mx-3 mt-3 p-3 rounded bg-secondary/50 border-l-2 border-primary/40 space-y-3">
@@ -49,6 +40,18 @@ export function GalleryCard({ content }: GalleryCardProps) {
           </div>
         </div>
       )}
+
+      {/* Storyboard Grid Image */}
+      {content.imageUrl ? (
+        <div className="mx-3 mt-3 rounded overflow-hidden film-border">
+          <img src={content.imageUrl} alt={content.skit?.narrative || content.prompt} className="w-full aspect-square object-cover" />
+        </div>
+      ) : (
+        <div className="mx-3 mt-3 w-auto aspect-square bg-secondary rounded flex items-center justify-center">
+          <span className="text-4xl">{content.style.icon}</span>
+        </div>
+      )}
+
 
       {/* Actions */}
       <div className="p-3 space-y-2">
