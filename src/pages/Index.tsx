@@ -83,7 +83,15 @@ const Index = () => {
         imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
       }
     } else {
-      imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
+      const seed = Date.now();
+      imageUrl = `https://picsum.photos/seed/${seed}/800/450`;
+      storyboardUrl = `https://picsum.photos/seed/${seed + 99}/800/800`;
+      sceneImages = [
+        `https://picsum.photos/seed/${seed + 1}/400/400`,
+        `https://picsum.photos/seed/${seed + 2}/400/400`,
+        `https://picsum.photos/seed/${seed + 3}/400/400`,
+        `https://picsum.photos/seed/${seed + 4}/400/400`,
+      ];
     }
 
     const content: GeneratedContent = {
