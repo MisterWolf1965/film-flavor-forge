@@ -47,6 +47,24 @@ export function GalleryCard({ content }: GalleryCardProps) {
               </div>
             ))}
           </div>
+
+          {/* Scene Images 2x2 Grid */}
+          {content.sceneImages && content.sceneImages.some(Boolean) && (
+            <div className="grid grid-cols-2 gap-1.5 pt-1">
+              {content.skit.scenes.map((_, i) => (
+                <div key={i} className="relative rounded overflow-hidden aspect-square bg-secondary">
+                  {content.sceneImages?.[i] ? (
+                    <img src={content.sceneImages[i]} alt={`Scene ${i + 1}`} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-xs text-muted-foreground">S{i + 1}</span>
+                    </div>
+                  )}
+                  <span className="absolute top-1 left-1 text-[9px] font-mono font-bold bg-background/70 text-primary px-1 rounded">S{i + 1}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
