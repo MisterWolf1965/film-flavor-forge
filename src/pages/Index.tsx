@@ -30,7 +30,7 @@ const Index = () => {
     if (useAI) {
       try {
         const { data, error } = await supabase.functions.invoke("generate-image", {
-          body: { prompt: result.imagePrompt }
+          body: { scenes: result.skit.scenes }
         });
         if (error) {
           if (error.message?.includes("402") || error.message?.includes("credits")) {
