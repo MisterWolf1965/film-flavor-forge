@@ -399,5 +399,6 @@ export type GeneratedContent = ReturnType<typeof generatePrompt> & {
   id: string;
   imageUrl?: string;
   storyboardUrl?: string;
+  sceneImages?: [string?, string?, string?, string?];
   createdAt: Date;
 };

@@ -28,16 +28,22 @@ const Index = () => {
 
     let imageUrl: string | undefined;
     let storyboardUrl: string | undefined;
+    let sceneImages: [string?, string?, string?, string?] = [];
 
     if (useAI) {
-      // Generate both hero image and storyboard in parallel
-      const [heroResult, storyboardResult] = await Promise.allSettled([
+      // Generate hero, storyboard, and 4 scene images in parallel
+      const [heroResult, storyboardResult, ...sceneResults] = await Promise.allSettled([
         supabase.functions.invoke("generate-image", {
           body: { prompt: result.imagePrompt }
         }),
         supabase.functions.invoke("generate-image", {
           body: { scenes: result.skit.scenes }
         }),
+        ...result.skit.scenes.map((scene) =>
+          supabase.functions.invoke("generate-image", {
+            body: { prompt: scene }
+          })
+        ),
       ]);
 
       // Hero image
@@ -63,6 +69,16 @@ const Index = () => {
         }
       }
 
+      // Individual scene images
+      sceneResults.forEach((res, i) => {
+        if (res.status === "fulfilled") {
+          const { data, error } = res.value;
+          if (!error && !data?.error && data?.imageUrl) {
+            sceneImages[i] = data.imageUrl;
+          }
+        }
+      });
+
       if (!imageUrl) {
         imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
       }
@@ -75,6 +91,7 @@ const Index = () => {
       id: crypto.randomUUID(),
       imageUrl,
       storyboardUrl,
+      sceneImages: sceneImages.length > 0 ? sceneImages as [string?, string?, string?, string?] : undefined,
       createdAt: new Date()
     };
     return content;
