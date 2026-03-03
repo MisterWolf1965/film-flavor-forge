@@ -24,7 +24,16 @@ export function GalleryCard({ content }: GalleryCardProps) {
         </div>
       </div>
 
-      {/* Skit */}
+      {/* Hero Image from Skit */}
+      {content.imageUrl ? (
+        <img src={content.imageUrl} alt={content.skit?.narrative || content.prompt} className="w-full aspect-video object-cover" />
+      ) : (
+        <div className="w-full aspect-video bg-secondary flex items-center justify-center">
+          <span className="text-4xl">{content.style.icon}</span>
+        </div>
+      )}
+
+      {/* Skit Narrative + Scene Prompts */}
       {content.skit && (
         <div className="mx-3 mt-3 p-3 rounded bg-secondary/50 border-l-2 border-primary/40 space-y-3">
           <p className="font-mono text-xs italic text-foreground/90 leading-relaxed">
@@ -42,13 +51,10 @@ export function GalleryCard({ content }: GalleryCardProps) {
       )}
 
       {/* Storyboard Grid Image */}
-      {content.imageUrl ? (
+      {content.storyboardUrl && (
         <div className="mx-3 mt-3 rounded overflow-hidden film-border">
-          <img src={content.imageUrl} alt={content.skit?.narrative || content.prompt} className="w-full aspect-square object-cover" />
-        </div>
-      ) : (
-        <div className="mx-3 mt-3 w-auto aspect-square bg-secondary rounded flex items-center justify-center">
-          <span className="text-4xl">{content.style.icon}</span>
+          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider px-1 pb-1">Storyboard</p>
+          <img src={content.storyboardUrl} alt="Storyboard grid" className="w-full aspect-square object-cover" />
         </div>
       )}
 

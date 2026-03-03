@@ -398,5 +398,6 @@ export function generatePrompt(style: CinematicStyle) {
 export type GeneratedContent = ReturnType<typeof generatePrompt> & {
   id: string;
   imageUrl?: string;
+  storyboardUrl?: string;
   createdAt: Date;
 };
