@@ -35,10 +35,18 @@ export function GalleryCard({ content }: GalleryCardProps) {
 
       {/* Skit */}
       {content.skit && (
-        <div className="mx-3 mt-3 p-3 rounded bg-secondary/50 border-l-2 border-primary/40">
+        <div className="mx-3 mt-3 p-3 rounded bg-secondary/50 border-l-2 border-primary/40 space-y-3">
           <p className="font-mono text-xs italic text-foreground/90 leading-relaxed">
-            🎬 {content.skit}
+            🎬 {content.skit.narrative}
           </p>
+          <div className="space-y-2">
+            {content.skit.scenes.map((scene, i) => (
+              <div key={i} className="flex gap-2">
+                <span className="text-[10px] font-mono text-primary font-bold shrink-0">S{i + 1}</span>
+                <p className="text-[10px] font-mono text-foreground/70 leading-relaxed">{scene}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

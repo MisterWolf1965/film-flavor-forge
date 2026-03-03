@@ -12,7 +12,7 @@ const STEPS = [
 interface GenerationProgressProps {
   currentStep: number;
   isActive: boolean;
-  skitStyle?: { label: string; icon: string; description: string; skit: string };
+  skitStyle?: { label: string; icon: string; description: string; skit: { narrative: string; scenes: string[] } };
   promptText?: string;
   imageUrl?: string;
   metaDescription?: string;
@@ -82,7 +82,7 @@ export function GenerationProgress({
   );
 }
 
-function StepSkit({ style }: { style?: { label: string; icon: string; description: string; skit: string } }) {
+function StepSkit({ style }: { style?: { label: string; icon: string; description: string; skit: { narrative: string; scenes: string[] } } }) {
   return (
     <div className="w-full space-y-3 animate-fade-in">
       <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Random Skit Selected</p>
@@ -93,7 +93,7 @@ function StepSkit({ style }: { style?: { label: string; icon: string; descriptio
         <div className="space-y-1.5">
           <p className="text-xs font-mono text-primary font-medium">{style?.label || "..."}</p>
           <p className="text-[11px] font-mono text-foreground leading-relaxed italic">
-            "{style?.skit || "Rolling the dice..."}"
+            "{style?.skit?.narrative || "Rolling the dice..."}"
           </p>
         </div>
       </div>
