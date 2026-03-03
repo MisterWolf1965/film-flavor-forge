@@ -46,6 +46,7 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
       <GenerationProgress
         currentStep={currentStep}
         isActive={autoRunning}
+        skitStyle={sampleData ? { label: sampleData.style.label, icon: sampleData.style.icon, description: sampleData.style.description, skit: sampleData.skit } : undefined}
         promptText={sampleData?.prompt}
         imageUrl={`https://picsum.photos/seed/${Date.now()}/800/450`}
         metaDescription={sampleData?.socialDescription}
