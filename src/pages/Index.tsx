@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { Film, LayoutGrid, Play, Square, RotateCcw, FileImage, Sparkles } from "lucide-react";
+import { Film, LayoutGrid, Play, Square, RotateCcw, FileImage, Sparkles, Loader2 } from "lucide-react";
 import { GeneratorView } from "@/components/GeneratorView";
 import { GalleryView } from "@/components/GalleryView";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ const Index = () => {
   const [gallery, setGallery] = useState<GeneratedContent[]>([]);
   const [autoRunning, setAutoRunning] = useState(false);
   const [autoCount, setAutoCount] = useState(0);
+  const [generating, setGenerating] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopAuto = useCallback(() => {
@@ -131,9 +132,15 @@ const Index = () => {
   }, [autoRunning, generateOne, stopAuto]);
 
   const handleGenerateSingle = useCallback(async (useAI: boolean) => {
-    const content = await generateOne(useAI);
-    setGallery((prev) => [content, ...prev]);
-    toast({ title: useAI ? "AI Generated" : "Placeholder Generated", description: "Added to gallery." });
+    setGenerating(true);
+    try {
+      const content = await generateOne(useAI);
+      setGallery((prev) => [content, ...prev]);
+      setTab("gallery");
+      toast({ title: useAI ? "AI Generated" : "Placeholder Generated", description: "Added to gallery." });
+    } finally {
+      setGenerating(false);
+    }
   }, [generateOne]);
 
   const handleReset = () => {
@@ -182,11 +189,12 @@ const Index = () => {
       <div className="max-w-2xl mx-auto pt-6 py-0 px-0">
         <div className="flex flex-wrap items-center justify-center p-3 rounded-lg border border-border bg-background/50 gap-2">
           {/* Single generate buttons */}
-          <Button onClick={() => handleGenerateSingle(false)} variant="outline" size="sm" className="font-mono text-xs gap-2">
+          <Button onClick={() => handleGenerateSingle(false)} variant="outline" size="sm" className="font-mono text-xs gap-2" disabled={generating}>
             <FileImage className="w-3 h-3" /> Placeholder
           </Button>
-          <Button onClick={() => handleGenerateSingle(true)} variant="default" size="sm" className="font-mono text-xs gap-2">
-            <Sparkles className="w-3 h-3" /> Generate AI
+          <Button onClick={() => handleGenerateSingle(true)} variant="default" size="sm" className="font-mono text-xs gap-2" disabled={generating}>
+            {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+            {generating ? "Generating..." : "Generate AI"}
           </Button>
 
           <div className="w-px h-6 bg-border mx-1" />
