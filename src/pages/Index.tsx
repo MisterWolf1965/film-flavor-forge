@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { Film, LayoutGrid, Play, Square, RotateCcw } from "lucide-react";
+import { Film, LayoutGrid, Play, Square, RotateCcw, Image, Sparkles } from "lucide-react";
 import { GeneratorView } from "@/components/GeneratorView";
 import { GalleryView } from "@/components/GalleryView";
 import { Button } from "@/components/ui/button";
@@ -22,36 +22,39 @@ const Index = () => {
     setAutoRunning(false);
   }, []);
 
-  const generateOne = useCallback(async () => {
+  const generateOne = useCallback(async (useAI: boolean = true) => {
     const style = STYLES[Math.floor(Math.random() * STYLES.length)];
     const result = generatePrompt(style);
 
     let imageUrl: string | undefined;
-    try {
-      const { data, error } = await supabase.functions.invoke("generate-image", {
-        body: { prompt: result.imagePrompt }
-      });
-      if (error) {
-        // Check for credit/rate-limit errors from the response
-        if (error.message?.includes("402") || error.message?.includes("credits")) {
-          toast({ title: "AI Credits Exhausted", description: "Please add credits in Settings → Workspace → Usage.", variant: "destructive" });
-        } else if (error.message?.includes("429")) {
-          toast({ title: "Rate Limited", description: "Too many requests. Please wait a moment.", variant: "destructive" });
+    if (useAI) {
+      try {
+        const { data, error } = await supabase.functions.invoke("generate-image", {
+          body: { prompt: result.imagePrompt }
+        });
+        if (error) {
+          if (error.message?.includes("402") || error.message?.includes("credits")) {
+            toast({ title: "AI Credits Exhausted", description: "Please add credits in Settings → Workspace → Usage.", variant: "destructive" });
+          } else if (error.message?.includes("429")) {
+            toast({ title: "Rate Limited", description: "Too many requests. Please wait a moment.", variant: "destructive" });
+          }
+          throw error;
         }
-        throw error;
-      }
-      if (data?.error) {
-        toast({ title: "Generation Notice", description: data.error, variant: "destructive" });
-        if (data?.recoverable) {
-          imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
+        if (data?.error) {
+          toast({ title: "Generation Notice", description: data.error, variant: "destructive" });
+          if (data?.recoverable) {
+            imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
+          } else {
+            throw new Error(data.error);
+          }
         } else {
-          throw new Error(data.error);
+          imageUrl = data?.imageUrl;
         }
-      } else {
-        imageUrl = data?.imageUrl;
+      } catch (err) {
+        console.error("Image generation failed, using placeholder:", err);
+        imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
       }
-    } catch (err) {
-      console.error("Image generation failed, using placeholder:", err);
+    } else {
       imageUrl = `https://picsum.photos/seed/${Date.now()}/800/450`;
     }
 
@@ -64,7 +67,7 @@ const Index = () => {
     return content;
   }, []);
 
-  const startAuto = useCallback(() => {
+  const startAuto = useCallback((useAI: boolean = true) => {
     if (autoRunning) return;
     setAutoRunning(true);
     setAutoCount(0);
@@ -76,19 +79,24 @@ const Index = () => {
         toast({ title: "Auto-generate complete", description: `Generated ${MAX_AUTO} prompts.` });
         return;
       }
-      const content = await generateOne();
+      const content = await generateOne(useAI);
       setGallery((prev) => [content, ...prev]);
       count++;
       setAutoCount(count);
     };
 
-    // Generate first one immediately
     runOne();
 
     intervalRef.current = setInterval(() => {
       runOne();
-    }, 15000);
+    }, useAI ? 15000 : 3000);
   }, [autoRunning, generateOne, stopAuto]);
+
+  const handleGenerateSingle = useCallback(async (useAI: boolean) => {
+    const content = await generateOne(useAI);
+    setGallery((prev) => [content, ...prev]);
+    toast({ title: useAI ? "AI Generated" : "Placeholder Generated", description: "Added to gallery." });
+  }, [generateOne]);
 
   const handleReset = () => {
     stopAuto();
@@ -132,20 +140,36 @@ const Index = () => {
         </div>
       </nav>
 
-      {/* Auto-generate controls */}
+      {/* Controls */}
       <div className="max-w-2xl mx-auto pt-6 py-0 px-0">
-        <div className="flex items-center justify-center p-3 rounded-lg border border-border bg-slate-950 gap-[12px]">
-          {!autoRunning ?
-          <Button onClick={startAuto} variant="outline" size="sm" className="font-mono text-xs gap-2">
-              <Play className="w-3 h-3" /> Start Auto (1/min, max {MAX_AUTO})
-            </Button> :
+        <div className="flex flex-wrap items-center justify-center p-3 rounded-lg border border-border bg-background/50 gap-2">
+          {/* Single generate buttons */}
+          <Button onClick={() => handleGenerateSingle(false)} variant="outline" size="sm" className="font-mono text-xs gap-2">
+            <Image className="w-3 h-3" /> Placeholder
+          </Button>
+          <Button onClick={() => handleGenerateSingle(true)} variant="default" size="sm" className="font-mono text-xs gap-2">
+            <Sparkles className="w-3 h-3" /> Generate AI
+          </Button>
 
-          <Button onClick={stopAuto} variant="destructive" size="sm" className="font-mono text-xs gap-2">
+          <div className="w-px h-6 bg-border mx-1" />
+
+          {/* Auto controls */}
+          {!autoRunning ? (
+            <>
+              <Button onClick={() => startAuto(false)} variant="outline" size="sm" className="font-mono text-xs gap-2">
+                <Play className="w-3 h-3" /> Auto Placeholder
+              </Button>
+              <Button onClick={() => startAuto(true)} variant="secondary" size="sm" className="font-mono text-xs gap-2">
+                <Play className="w-3 h-3" /> Auto AI
+              </Button>
+            </>
+          ) : (
+            <Button onClick={stopAuto} variant="destructive" size="sm" className="font-mono text-xs gap-2">
               <Square className="w-3 h-3" /> Stop ({autoCount}/{MAX_AUTO})
             </Button>
-          }
+          )}
           <Button onClick={handleReset} variant="ghost" size="sm" className="font-mono text-xs gap-2">
-            <RotateCcw className="w-3 h-3" /> Reset All
+            <RotateCcw className="w-3 h-3" /> Reset
           </Button>
         </div>
       </div>
