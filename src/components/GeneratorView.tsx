@@ -2,22 +2,26 @@ import { useEffect, useState, useMemo } from "react";
 import { GenerationProgress } from "./GenerationProgress";
 import { STYLES, generatePrompt } from "@/lib/cinematic-data";
 
+const TOTAL_STEPS = 5;
+const STEP_DURATION_MS = 3000;
+
 interface GeneratorViewProps {
   autoRunning: boolean;
+  generating?: boolean;
 }
 
-export function GeneratorView({ autoRunning }: GeneratorViewProps) {
+export function GeneratorView({ autoRunning, generating }: GeneratorViewProps) {
+  const isActive = autoRunning || !!generating;
   const [currentStep, setCurrentStep] = useState(-1);
 
-  // Generate a sample prompt to display in step panels
   const sampleData = useMemo(() => {
-    if (!autoRunning) return null;
+    if (!isActive) return null;
     const style = STYLES[Math.floor(Math.random() * STYLES.length)];
     return generatePrompt(style);
-  }, [autoRunning, currentStep]); // regenerate when restarted
+  }, [isActive, currentStep]);
 
   useEffect(() => {
-    if (!autoRunning) {
+    if (!isActive) {
       setCurrentStep(-1);
       return;
     }
@@ -25,12 +29,18 @@ export function GeneratorView({ autoRunning }: GeneratorViewProps) {
     setCurrentStep(0);
     let step = 0;
     const timer = setInterval(() => {
-      step = (step + 1) % 4;
+      step++;
+      if (autoRunning) {
+        step = step % TOTAL_STEPS;
+      } else if (step >= TOTAL_STEPS) {
+        clearInterval(timer);
+        return;
+      }
       setCurrentStep(step);
-    }, 3750);
+    }, STEP_DURATION_MS);
 
     return () => clearInterval(timer);
-  }, [autoRunning]);
+  }, [isActive, autoRunning]);
 
   return (
     <div className="space-y-8">
