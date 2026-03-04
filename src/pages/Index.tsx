@@ -223,7 +223,7 @@ const Index = () => {
       {/* Content */}
       <main className="max-w-2xl mx-auto px-4 py-8 border border-border rounded-lg my-6 bg-card">
         {tab === "generate" ?
-        <GeneratorView autoRunning={autoRunning} /> :
+        <GeneratorView autoRunning={autoRunning} generating={generating} /> :
 
         <GalleryView items={gallery} />
         }
