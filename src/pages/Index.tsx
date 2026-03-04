@@ -133,13 +133,15 @@ const Index = () => {
 
   const handleGenerateSingle = useCallback(async (useAI: boolean) => {
     setGenerating(true);
+    setTab("generate");
     try {
-      const content = await generateOne(useAI);
+      const minDelay = new Promise(resolve => setTimeout(resolve, useAI ? 0 : 15000));
+      const [content] = await Promise.all([generateOne(useAI), minDelay]);
       setGallery((prev) => [content, ...prev]);
-      setTab("gallery");
       toast({ title: useAI ? "AI Generated" : "Placeholder Generated", description: "Added to gallery." });
     } finally {
       setGenerating(false);
+      setTimeout(() => setTab("gallery"), 500);
     }
   }, [generateOne]);
 
