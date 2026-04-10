@@ -177,8 +177,11 @@ const Index = () => {
         </div>
       </nav>
 
-      {/* Controls */}
-      <div className="max-w-2xl mx-auto pt-6 py-0 px-0">
+      {/* Instagram Connection + Controls */}
+      <div className="max-w-2xl mx-auto pt-6 py-0 px-0 space-y-2">
+        <div className="flex justify-center">
+          <InstagramConnect />
+        </div>
         <div className="flex flex-wrap items-center justify-center p-3 rounded-lg border border-border bg-background/50 gap-2">
           {/* Single generate buttons */}
           <Button onClick={() => handleGenerateSingle(false)} variant="outline" size="sm" className="font-mono text-xs gap-2" disabled={generating}>
