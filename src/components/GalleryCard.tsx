@@ -1,5 +1,7 @@
-import { Heart, MessageCircle, Share2, Bookmark } from "lucide-react";
+import { Heart, MessageCircle, Share2, Bookmark, Instagram } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import type { GeneratedContent } from "@/lib/cinematic-data";
 
 interface GalleryCardProps {
@@ -9,7 +11,29 @@ interface GalleryCardProps {
 export function GalleryCard({ content }: GalleryCardProps) {
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [posting, setPosting] = useState(false);
   const likes = Math.floor(Math.random() * 500) + 50;
+
+  const handlePostToInstagram = async () => {
+    if (!content.imageUrl) {
+      toast.error("No image to post");
+      return;
+    }
+    setPosting(true);
+    try {
+      const caption = `${content.socialDescription}\n\n${content.tags.join(" ")}`;
+      const { data, error } = await supabase.functions.invoke("post-to-instagram", {
+        body: { imageUrl: content.imageUrl, caption },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success("Posted to Instagram! 🎉");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to post to Instagram");
+    } finally {
+      setPosting(false);
+    }
+  };
 
   return (
     <div className="bg-card rounded-lg overflow-hidden film-border animate-fade-up">
@@ -88,6 +112,14 @@ export function GalleryCard({ content }: GalleryCardProps) {
             </button>
             <MessageCircle className="w-5 h-5 text-foreground cursor-pointer hover:text-primary transition-colors" />
             <Share2 className="w-5 h-5 text-foreground cursor-pointer hover:text-primary transition-colors" />
+            <button
+              onClick={handlePostToInstagram}
+              disabled={posting || !content.imageUrl}
+              className="transition-transform hover:scale-110 disabled:opacity-50"
+              title="Post to Instagram"
+            >
+              <Instagram className={`w-5 h-5 ${posting ? "animate-pulse text-primary" : "text-foreground hover:text-primary"} transition-colors`} />
+            </button>
           </div>
           <button onClick={() => setSaved(!saved)} className="transition-transform hover:scale-110">
             <Bookmark className={`w-5 h-5 ${saved ? "fill-primary text-primary" : "text-foreground"}`} />
