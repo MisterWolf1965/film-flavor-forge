@@ -11,7 +11,29 @@ interface GalleryCardProps {
 export function GalleryCard({ content }: GalleryCardProps) {
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [posting, setPosting] = useState(false);
   const likes = Math.floor(Math.random() * 500) + 50;
+
+  const handlePostToInstagram = async () => {
+    if (!content.imageUrl) {
+      toast.error("No image to post");
+      return;
+    }
+    setPosting(true);
+    try {
+      const caption = `${content.socialDescription}\n\n${content.tags.join(" ")}`;
+      const { data, error } = await supabase.functions.invoke("post-to-instagram", {
+        body: { imageUrl: content.imageUrl, caption },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success("Posted to Instagram! 🎉");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to post to Instagram");
+    } finally {
+      setPosting(false);
+    }
+  };
 
   return (
     <div className="bg-card rounded-lg overflow-hidden film-border animate-fade-up">
