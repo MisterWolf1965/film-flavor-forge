@@ -58,13 +58,6 @@ const Index = () => {
         }
       }
 
-      // Storyboard grid
-      if (storyboardResult.status === "fulfilled") {
-        const { data, error } = storyboardResult.value;
-        if (!error && !data?.error) {
-          storyboardUrl = data?.imageUrl;
-        }
-      }
 
       // Individual scene images
       sceneResults.forEach((res, i) => {
@@ -82,7 +75,7 @@ const Index = () => {
     } else {
       const seed = Date.now();
       imageUrl = `https://picsum.photos/seed/${seed}/800/450`;
-      storyboardUrl = `https://picsum.photos/seed/${seed + 99}/800/800`;
+      
       sceneImages = [
         `https://picsum.photos/seed/${seed + 1}/400/400`,
         `https://picsum.photos/seed/${seed + 2}/400/400`,
@@ -95,7 +88,7 @@ const Index = () => {
       ...result,
       id: crypto.randomUUID(),
       imageUrl,
-      storyboardUrl,
+      
       sceneImages: sceneImages.length > 0 ? sceneImages as [string?, string?, string?, string?] : undefined,
       createdAt: new Date()
     };
