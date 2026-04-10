@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { Film, LayoutGrid, Play, Square, RotateCcw, FileImage, Sparkles, Loader2 } from "lucide-react";
 import { GeneratorView } from "@/components/GeneratorView";
 import { GalleryView } from "@/components/GalleryView";
+import { InstagramConnect } from "@/components/InstagramConnect";
 import { Button } from "@/components/ui/button";
 import { STYLES, generatePrompt, type GeneratedContent } from "@/lib/cinematic-data";
 import { toast } from "@/hooks/use-toast";
