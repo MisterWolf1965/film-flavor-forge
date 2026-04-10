@@ -1,6 +1,6 @@
 import { Heart, MessageCircle, Share2, Bookmark, Instagram } from "lucide-react";
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from "@/components/ui/carousel";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { GeneratedContent } from "@/lib/cinematic-data";
@@ -15,17 +15,30 @@ export function GalleryCard({ content }: GalleryCardProps) {
   const [posting, setPosting] = useState(false);
   const likes = Math.floor(Math.random() * 500) + 50;
 
+  // Collect all images: hero first, then scene images
+  const allImages = useMemo(() => {
+    const imgs: string[] = [];
+    if (content.imageUrl) imgs.push(content.imageUrl);
+    if (content.sceneImages) {
+      content.sceneImages.forEach((img) => {
+        if (img) imgs.push(img);
+      });
+    }
+    return imgs;
+  }, [content.imageUrl, content.sceneImages]);
+
   const handlePostToInstagram = async () => {
-    if (!content.imageUrl) {
-      toast.error("No image to post");
+    if (allImages.length === 0) {
+      toast.error("No images to post");
       return;
     }
     setPosting(true);
     try {
       const caption = `${content.socialDescription}\n\n${content.tags.join(" ")}`;
-      const { data, error } = await supabase.functions.invoke("post-to-instagram", {
-        body: { imageUrl: content.imageUrl, caption },
-      });
+      const body = allImages.length > 1
+        ? { imageUrls: allImages, caption }
+        : { imageUrl: allImages[0], caption };
+      const { data, error } = await supabase.functions.invoke("post-to-instagram", { body });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       toast.success("Posted to Instagram! 🎉");
@@ -49,16 +62,28 @@ export function GalleryCard({ content }: GalleryCardProps) {
         </div>
       </div>
 
-      {/* Hero Image from Skit */}
-      {content.imageUrl ? (
-        <img src={content.imageUrl} alt={content.skit?.narrative || content.prompt} className="w-full aspect-video object-cover" />
+      {/* Image Carousel */}
+      {allImages.length > 1 ? (
+        <Carousel className="w-full">
+          <CarouselContent className="-ml-0">
+            {allImages.map((img, i) => (
+              <CarouselItem key={i} className="pl-0">
+                <img src={img} alt={`Slide ${i + 1}`} className="w-full aspect-video object-cover" />
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+          <CarouselPrevious className="left-2 h-7 w-7 bg-background/70 border-0" />
+          <CarouselNext className="right-2 h-7 w-7 bg-background/70 border-0" />
+        </Carousel>
+      ) : allImages.length === 1 ? (
+        <img src={allImages[0]} alt={content.prompt} className="w-full aspect-video object-cover" />
       ) : (
         <div className="w-full aspect-video bg-secondary flex items-center justify-center">
           <span className="text-4xl">{content.style.icon}</span>
         </div>
       )}
 
-      {/* Skit Narrative + Scene Prompts */}
+      {/* Skit Narrative */}
       {content.skit && (
         <div className="mx-3 mt-3 p-3 rounded bg-secondary/50 border-l-2 border-primary/40 space-y-3">
           <p className="font-mono text-xs italic text-foreground/90 leading-relaxed">
@@ -72,58 +97,21 @@ export function GalleryCard({ content }: GalleryCardProps) {
               </div>
             ))}
           </div>
-
-          {/* Scene Images 2x2 Grid */}
-          {content.sceneImages && content.sceneImages.some(Boolean) && (
-            <div className="pt-1">
-              <Carousel className="w-full">
-                <CarouselContent className="-ml-2">
-                  {content.skit.scenes.map((_, i) => (
-                    <CarouselItem key={i} className="pl-2">
-                      <div className="relative rounded overflow-hidden aspect-square bg-secondary">
-                        {content.sceneImages?.[i] ? (
-                          <img src={content.sceneImages[i]} alt={`Scene ${i + 1}`} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <span className="text-xs text-muted-foreground">S{i + 1}</span>
-                          </div>
-                        )}
-                        <span className="absolute top-1 left-1 text-[9px] font-mono font-bold bg-background/70 text-primary px-1 rounded">S{i + 1}</span>
-                      </div>
-                    </CarouselItem>
-                  ))}
-                </CarouselContent>
-                <CarouselPrevious className="left-1 h-6 w-6 bg-background/70 border-0" />
-                <CarouselNext className="right-1 h-6 w-6 bg-background/70 border-0" />
-              </Carousel>
-            </div>
-          )}
         </div>
       )}
-
-      {/* Storyboard Grid Image */}
-      {content.storyboardUrl && (
-        <div className="mx-3 mt-3 rounded overflow-hidden film-border">
-          <p className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider px-1 pb-1">Storyboard</p>
-          <img src={content.storyboardUrl} alt="Storyboard grid" className="w-full aspect-square object-cover" />
-        </div>
-      )}
-
 
       {/* Actions */}
       <div className="p-3 space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => setLiked(!liked)} className="transition-transform hover:scale-110">
-              <Heart
-                className={`w-5 h-5 ${liked ? "fill-accent text-accent" : "text-foreground"}`}
-              />
+              <Heart className={`w-5 h-5 ${liked ? "fill-accent text-accent" : "text-foreground"}`} />
             </button>
             <MessageCircle className="w-5 h-5 text-foreground cursor-pointer hover:text-primary transition-colors" />
             <Share2 className="w-5 h-5 text-foreground cursor-pointer hover:text-primary transition-colors" />
             <button
               onClick={handlePostToInstagram}
-              disabled={posting || !content.imageUrl}
+              disabled={posting || allImages.length === 0}
               className="transition-transform hover:scale-110 disabled:opacity-50"
               title="Post to Instagram"
             >

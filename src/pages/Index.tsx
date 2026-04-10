@@ -28,7 +28,6 @@ const Index = () => {
     const result = generatePrompt(style);
 
     let imageUrl: string | undefined;
-    let storyboardUrl: string | undefined;
     let sceneImages: [string?, string?, string?, string?] = [];
 
     if (useAI) {
