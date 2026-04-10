@@ -32,12 +32,9 @@ const Index = () => {
 
     if (useAI) {
       // Generate hero, storyboard, and 4 scene images in parallel
-      const [heroResult, storyboardResult, ...sceneResults] = await Promise.allSettled([
+      const [heroResult, ...sceneResults] = await Promise.allSettled([
         supabase.functions.invoke("generate-image", {
           body: { prompt: result.imagePrompt }
-        }),
-        supabase.functions.invoke("generate-image", {
-          body: { scenes: result.skit.scenes }
         }),
         ...result.skit.scenes.map((scene) =>
           supabase.functions.invoke("generate-image", {
