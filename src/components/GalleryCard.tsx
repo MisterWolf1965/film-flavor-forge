@@ -1,5 +1,7 @@
-import { Heart, MessageCircle, Share2, Bookmark } from "lucide-react";
+import { Heart, MessageCircle, Share2, Bookmark, Instagram } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import type { GeneratedContent } from "@/lib/cinematic-data";
 
 interface GalleryCardProps {
