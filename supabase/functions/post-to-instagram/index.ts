@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,9 +24,57 @@ serve(async (req) => {
 
     const accessToken = Deno.env.get("INSTAGRAM_ACCESS_TOKEN");
     const igAccountId = Deno.env.get("INSTAGRAM_BUSINESS_ACCOUNT_ID");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     if (!accessToken || !igAccountId) {
       throw new Error("Instagram credentials not configured");
+    }
+
+    // Step 0: Upload image to storage to get a publicly accessible URL
+    let publicImageUrl = imageUrl;
+
+    if (imageUrl.startsWith("data:")) {
+      // Base64 data URL — decode and upload
+      console.log("Uploading base64 image to storage...");
+      const base64Data = imageUrl.split(",")[1];
+      const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+      const fileName = `ig-${Date.now()}.png`;
+
+      const supabase = createClient(supabaseUrl, serviceRoleKey);
+      const { error: uploadError } = await supabase.storage
+        .from("instagram-images")
+        .upload(fileName, binaryData, { contentType: "image/png", upsert: true });
+
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+      const { data: urlData } = supabase.storage
+        .from("instagram-images")
+        .getPublicUrl(fileName);
+      publicImageUrl = urlData.publicUrl;
+      console.log("Uploaded to:", publicImageUrl);
+    } else if (!imageUrl.startsWith("http")) {
+      throw new Error("Invalid image URL format");
+    } else {
+      // External URL — fetch and re-upload to ensure it's directly accessible
+      console.log("Fetching external image and re-uploading...");
+      const imgRes = await fetch(imageUrl);
+      if (!imgRes.ok) throw new Error("Failed to fetch image from URL");
+      const imgBlob = await imgRes.arrayBuffer();
+      const fileName = `ig-${Date.now()}.jpg`;
+
+      const supabase = createClient(supabaseUrl, serviceRoleKey);
+      const { error: uploadError } = await supabase.storage
+        .from("instagram-images")
+        .upload(fileName, new Uint8Array(imgBlob), { contentType: "image/jpeg", upsert: true });
+
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+      const { data: urlData } = supabase.storage
+        .from("instagram-images")
+        .getPublicUrl(fileName);
+      publicImageUrl = urlData.publicUrl;
+      console.log("Re-uploaded to:", publicImageUrl);
     }
 
     // Step 1: Create media container
@@ -36,8 +85,9 @@ serve(async (req) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          image_url: imageUrl,
+          image_url: publicImageUrl,
           caption,
+          media_type: "IMAGE",
           access_token: accessToken,
         }),
       }
@@ -52,8 +102,7 @@ serve(async (req) => {
     const creationId = containerData.id;
     console.log("Media container created:", creationId);
 
-    // Step 2: Wait for container to be ready, then publish
-    // Poll status for up to 30 seconds
+    // Step 2: Wait for container to be ready
     let ready = false;
     for (let i = 0; i < 10; i++) {
       await new Promise((r) => setTimeout(r, 3000));
