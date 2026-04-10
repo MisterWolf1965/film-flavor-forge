@@ -112,6 +112,14 @@ export function GalleryCard({ content }: GalleryCardProps) {
             </button>
             <MessageCircle className="w-5 h-5 text-foreground cursor-pointer hover:text-primary transition-colors" />
             <Share2 className="w-5 h-5 text-foreground cursor-pointer hover:text-primary transition-colors" />
+            <button
+              onClick={handlePostToInstagram}
+              disabled={posting || !content.imageUrl}
+              className="transition-transform hover:scale-110 disabled:opacity-50"
+              title="Post to Instagram"
+            >
+              <Instagram className={`w-5 h-5 ${posting ? "animate-pulse text-primary" : "text-foreground hover:text-primary"} transition-colors`} />
+            </button>
           </div>
           <button onClick={() => setSaved(!saved)} className="transition-transform hover:scale-110">
             <Bookmark className={`w-5 h-5 ${saved ? "fill-primary text-primary" : "text-foreground"}`} />
