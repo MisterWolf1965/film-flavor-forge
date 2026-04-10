@@ -7,6 +7,21 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+async function getCredentials(supabase: ReturnType<typeof createClient>) {
+  const { data, error } = await supabase
+    .from("instagram_credentials")
+    .select("access_token, instagram_account_id, token_expires_at")
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(`Failed to fetch credentials: ${error.message}`);
+  if (!data) throw new Error("Instagram not connected. Please connect via Facebook OAuth first.");
+  if (data.token_expires_at && new Date(data.token_expires_at) < new Date()) {
+    throw new Error("Instagram token expired. Please reconnect via Facebook OAuth.");
+  }
+  return { accessToken: data.access_token, igAccountId: data.instagram_account_id };
+}
+
 async function uploadToStorage(
   supabase: ReturnType<typeof createClient>,
   imageUrl: string
@@ -57,7 +72,6 @@ serve(async (req) => {
     const body = await req.json();
     const caption = body.caption;
 
-    // Support both single image and carousel
     let imageUrls: string[] = [];
     if (body.imageUrls && Array.isArray(body.imageUrls)) {
       imageUrls = body.imageUrls;
@@ -72,16 +86,12 @@ serve(async (req) => {
       );
     }
 
-    const accessToken = Deno.env.get("INSTAGRAM_ACCESS_TOKEN");
-    const igAccountId = Deno.env.get("INSTAGRAM_BUSINESS_ACCOUNT_ID");
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    if (!accessToken || !igAccountId) {
-      throw new Error("Instagram credentials not configured");
-    }
-
     const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    // Get credentials from database
+    const { accessToken, igAccountId } = await getCredentials(supabase);
 
     // Upload all images to storage
     console.log(`Uploading ${imageUrls.length} image(s) to storage...`);
@@ -151,12 +161,10 @@ serve(async (req) => {
       console.log("Child container created:", data.id);
     }
 
-    // Wait for all children
     for (const id of childIds) {
       await waitForContainer(id, accessToken);
     }
 
-    // Create carousel container
     console.log("Creating carousel container...");
     const carouselRes = await fetch(
       `https://graph.facebook.com/v19.0/${igAccountId}/media`,
@@ -177,7 +185,6 @@ serve(async (req) => {
 
     await waitForContainer(carouselData.id, accessToken);
 
-    // Publish
     console.log("Publishing carousel...");
     const publishRes = await fetch(
       `https://graph.facebook.com/v19.0/${igAccountId}/media_publish`,
