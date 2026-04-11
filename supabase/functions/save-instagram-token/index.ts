@@ -26,7 +26,7 @@ serve(async (req) => {
 
     // Verify the token works by making a test API call
     const testRes = await fetch(
-      `https://graph.facebook.com/v19.0/${igAccountId}?fields=id,username&access_token=${accessToken}`
+      `https://graph.facebook.com/v19.0/${igAccountId}?fields=id,name&access_token=${accessToken}`
     );
     const testData = await testRes.json();
     if (testData.error) {
