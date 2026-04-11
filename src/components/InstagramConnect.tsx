@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Instagram, CheckCircle, AlertCircle, Loader2, ExternalLink } from "lucide-react";
+import { Instagram, CheckCircle, AlertCircle, Loader2, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
@@ -15,6 +16,10 @@ interface IgStatus {
 export function InstagramConnect() {
   const [status, setStatus] = useState<IgStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showManual, setShowManual] = useState(false);
+  const [token, setToken] = useState("");
+  const [igId, setIgId] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const checkStatus = async () => {
     setLoading(true);
@@ -32,7 +37,6 @@ export function InstagramConnect() {
   useEffect(() => {
     checkStatus();
 
-    // Check for OAuth redirect result
     const params = new URLSearchParams(window.location.search);
     const igStatus = params.get("ig_status");
     if (igStatus === "connected") {
@@ -46,13 +50,28 @@ export function InstagramConnect() {
     }
   }, []);
 
-  const handleConnect = () => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const redirectUri = `${supabaseUrl}/functions/v1/facebook-oauth-callback`;
-    const appId = "1282009260538389"; // Public app ID, safe to include
-    const scopes = "instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement";
-    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes}&response_type=code`;
-    window.location.href = authUrl;
+  const handleSaveToken = async () => {
+    if (!token.trim() || !igId.trim()) {
+      toast({ title: "Missing fields", description: "Both token and IG Account ID are required.", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("save-instagram-token", {
+        body: { accessToken: token.trim(), igAccountId: igId.trim() },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "Instagram Connected! 🎉", description: data?.username ? `Linked to @${data.username}` : "Token saved successfully." });
+      setShowManual(false);
+      setToken("");
+      setIgId("");
+      checkStatus();
+    } catch (e) {
+      toast({ title: "Failed to save", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -63,7 +82,7 @@ export function InstagramConnect() {
     );
   }
 
-  if (status?.connected) {
+  if (status?.connected && !showManual) {
     return (
       <div className="flex items-center gap-2">
         <CheckCircle className="w-4 h-4 text-green-500" />
@@ -75,28 +94,47 @@ export function InstagramConnect() {
             </span>
           )}
         </span>
-        <Button onClick={handleConnect} variant="ghost" size="sm" className="text-[10px] h-6 px-2 font-mono">
-          Reconnect
+        <Button onClick={() => setShowManual(true)} variant="ghost" size="sm" className="text-[10px] h-6 px-2 font-mono">
+          Update Token
         </Button>
       </div>
     );
   }
 
-  if (status?.expired) {
+  if (showManual || !status?.connected) {
     return (
-      <div className="flex items-center gap-2">
-        <AlertCircle className="w-4 h-4 text-destructive" />
-        <span className="text-xs font-mono text-destructive">Token expired</span>
-        <Button onClick={handleConnect} variant="outline" size="sm" className="text-xs h-7 gap-1 font-mono">
-          <Instagram className="w-3 h-3" /> Reconnect
-        </Button>
+      <div className="flex flex-col gap-2 w-full max-w-md">
+        <div className="flex items-center gap-2">
+          <Key className="w-3 h-3 text-muted-foreground" />
+          <span className="text-xs font-mono text-muted-foreground">Paste Instagram credentials</span>
+        </div>
+        <Input
+          placeholder="Page Access Token"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          className="text-xs font-mono h-7"
+          type="password"
+        />
+        <Input
+          placeholder="IG Business Account ID"
+          value={igId}
+          onChange={(e) => setIgId(e.target.value)}
+          className="text-xs font-mono h-7"
+        />
+        <div className="flex gap-2">
+          <Button onClick={handleSaveToken} disabled={saving} size="sm" className="text-xs h-7 gap-1 font-mono">
+            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Instagram className="w-3 h-3" />}
+            {saving ? "Verifying..." : "Connect"}
+          </Button>
+          {(status?.connected) && (
+            <Button onClick={() => setShowManual(false)} variant="ghost" size="sm" className="text-xs h-7 font-mono">
+              Cancel
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
 
-  return (
-    <Button onClick={handleConnect} variant="outline" size="sm" className="text-xs h-7 gap-2 font-mono">
-      <Instagram className="w-3 h-3" /> Connect Instagram
-    </Button>
-  );
+  return null;
 }
