@@ -62,7 +62,7 @@ export function InstagramConnect() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast({ title: "Instagram Connected! 🎉", description: data?.username ? `Linked to @${data.username}` : "Token saved successfully." });
+      toast({ title: "Instagram Connected! 🎉", description: "Token saved and verified successfully." });
       setShowManual(false);
       setToken("");
       setIgId("");
