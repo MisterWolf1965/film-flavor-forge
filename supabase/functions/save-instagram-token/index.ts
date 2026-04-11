@@ -50,7 +50,7 @@ serve(async (req) => {
     if (insertError) throw new Error(`DB insert failed: ${insertError.message}`);
 
     return new Response(
-      JSON.stringify({ success: true, username: testData.username }),
+      JSON.stringify({ success: true, accountId: testData.id }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
