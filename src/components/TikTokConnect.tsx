@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { CheckCircle, Loader2, Key, Music } from "lucide-react";
+import { CheckCircle, Loader2, Music, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,21 +11,20 @@ interface TikTokStatus {
   expiresAt?: string;
 }
 
+const TIKTOK_CLIENT_KEY = "sbaw38iz0q3h0sm8ga";
+
 export function TikTokConnect() {
   const [status, setStatus] = useState<TikTokStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showManual, setShowManual] = useState(false);
-  const [token, setToken] = useState("");
-  const [userId, setUserId] = useState("");
+  const [showCodeInput, setShowCodeInput] = useState(false);
+  const [authCode, setAuthCode] = useState("");
   const [saving, setSaving] = useState(false);
 
   const checkStatus = async () => {
     setLoading(true);
     try {
-      // Check tiktok_credentials table via edge function or direct query
-      // For now we'll use a simple approach - try to read from the save function
       const { data, error } = await supabase
-        .from("tiktok_credentials" as any)
+        .from("tiktok_credentials")
         .select("tiktok_user_id, token_expires_at")
         .limit(1)
         .maybeSingle();
@@ -33,12 +32,11 @@ export function TikTokConnect() {
       if (error || !data) {
         setStatus({ connected: false });
       } else {
-        const d = data as any;
-        const expired = d.token_expires_at ? new Date(d.token_expires_at) < new Date() : false;
+        const expired = data.token_expires_at ? new Date(data.token_expires_at) < new Date() : false;
         setStatus({
           connected: !expired,
-          tiktokUserId: d.tiktok_user_id,
-          expiresAt: d.token_expires_at,
+          tiktokUserId: data.tiktok_user_id,
+          expiresAt: data.token_expires_at,
         });
       }
     } catch {
@@ -52,28 +50,47 @@ export function TikTokConnect() {
     checkStatus();
   }, []);
 
-  const handleSaveToken = async () => {
-    if (!token.trim() || !userId.trim()) {
-      toast({ title: "Missing fields", description: "Both token and TikTok User ID are required.", variant: "destructive" });
-      return;
+  // Build the TikTok OAuth URL — redirect back to our app
+  const redirectUri = `${window.location.origin}/`;
+  const tiktokAuthUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${TIKTOK_CLIENT_KEY}&scope=user.info.basic,video.upload,video.publish&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=tiktok_auth`;
+
+  // Check URL for auth code on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const state = params.get("state");
+    if (code && state === "tiktok_auth") {
+      // Clean URL
+      window.history.replaceState({}, "", window.location.pathname);
+      handleExchangeCode(code);
     }
+  }, []);
+
+  const handleExchangeCode = async (code: string) => {
     setSaving(true);
     try {
-      const { data, error } = await supabase.functions.invoke("save-tiktok-token", {
-        body: { accessToken: token.trim(), tiktokUserId: userId.trim() },
+      const { data, error } = await supabase.functions.invoke("tiktok-oauth-callback", {
+        body: { code, redirectUri },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast({ title: "TikTok Connected! 🎵", description: "Token saved and verified." });
-      setShowManual(false);
-      setToken("");
-      setUserId("");
+      toast({ title: "TikTok Connected! 🎵", description: `Logged in as ${data.displayName || "TikTok user"}` });
+      setShowCodeInput(false);
+      setAuthCode("");
       checkStatus();
     } catch (e) {
-      toast({ title: "Failed to save", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+      toast({ title: "Failed to connect TikTok", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleManualCodeSubmit = async () => {
+    if (!authCode.trim()) {
+      toast({ title: "Missing code", description: "Paste the authorization code from TikTok.", variant: "destructive" });
+      return;
+    }
+    await handleExchangeCode(authCode.trim());
   };
 
   if (loading) {
@@ -84,7 +101,15 @@ export function TikTokConnect() {
     );
   }
 
-  if (status?.connected && !showManual) {
+  if (saving) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-muted-foreground font-mono">
+        <Loader2 className="w-3 h-3 animate-spin" /> Connecting TikTok...
+      </div>
+    );
+  }
+
+  if (status?.connected && !showCodeInput) {
     return (
       <div className="flex items-center gap-2">
         <CheckCircle className="w-4 h-4 text-green-500" />
@@ -96,47 +121,52 @@ export function TikTokConnect() {
             </span>
           )}
         </span>
-        <Button onClick={() => setShowManual(true)} variant="ghost" size="sm" className="text-[10px] h-6 px-2 font-mono">
-          Update Token
+        <Button onClick={() => setShowCodeInput(true)} variant="ghost" size="sm" className="text-[10px] h-6 px-2 font-mono">
+          Reconnect
         </Button>
       </div>
     );
   }
 
-  if (showManual || !status?.connected) {
-    return (
-      <div className="flex flex-col gap-2 w-full max-w-md">
-        <div className="flex items-center gap-2">
-          <Key className="w-3 h-3 text-muted-foreground" />
-          <span className="text-xs font-mono text-muted-foreground">Paste TikTok credentials</span>
-        </div>
-        <Input
-          placeholder="TikTok Access Token"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          className="text-xs font-mono h-7"
-          type="password"
-        />
-        <Input
-          placeholder="TikTok Open ID / User ID"
-          value={userId}
-          onChange={(e) => setUserId(e.target.value)}
-          className="text-xs font-mono h-7"
-        />
-        <div className="flex gap-2">
-          <Button onClick={handleSaveToken} disabled={saving} size="sm" className="text-xs h-7 gap-1 font-mono">
-            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Music className="w-3 h-3" />}
-            {saving ? "Verifying..." : "Connect TikTok"}
-          </Button>
-          {status?.connected && (
-            <Button onClick={() => setShowManual(false)} variant="ghost" size="sm" className="text-xs h-7 font-mono">
-              Cancel
-            </Button>
-          )}
-        </div>
+  return (
+    <div className="flex flex-col gap-2 w-full max-w-md">
+      <div className="flex items-center gap-2">
+        <Music className="w-3 h-3 text-muted-foreground" />
+        <span className="text-xs font-mono text-muted-foreground">Connect TikTok via OAuth</span>
       </div>
-    );
-  }
 
-  return null;
+      <a
+        href={tiktokAuthUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 text-xs font-mono text-primary hover:underline"
+      >
+        <ExternalLink className="w-3 h-3" />
+        1. Authorize on TikTok
+      </a>
+
+      <p className="text-[10px] font-mono text-muted-foreground">
+        2. After authorizing, you'll be redirected back automatically. If not, paste the code from the URL below:
+      </p>
+
+      <Input
+        placeholder="Paste authorization code here (if not auto-detected)"
+        value={authCode}
+        onChange={(e) => setAuthCode(e.target.value)}
+        className="text-xs font-mono h-7"
+      />
+
+      <div className="flex gap-2">
+        <Button onClick={handleManualCodeSubmit} disabled={saving} size="sm" className="text-xs h-7 gap-1 font-mono">
+          {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Music className="w-3 h-3" />}
+          {saving ? "Connecting..." : "Connect TikTok"}
+        </Button>
+        {status?.connected && (
+          <Button onClick={() => setShowCodeInput(false)} variant="ghost" size="sm" className="text-xs h-7 font-mono">
+            Cancel
+          </Button>
+        )}
+      </div>
+    </div>
+  );
 }
