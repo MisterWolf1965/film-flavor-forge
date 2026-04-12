@@ -1,4 +1,4 @@
-import { Heart, MessageCircle, Share2, Bookmark, Instagram } from "lucide-react";
+import { Heart, MessageCircle, Share2, Bookmark, Instagram, Music } from "lucide-react";
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from "@/components/ui/carousel";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ export function GalleryCard({ content }: GalleryCardProps) {
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [postingTikTok, setPostingTikTok] = useState(false);
   const likes = Math.floor(Math.random() * 500) + 50;
 
   // Collect all images: hero first, then scene images
@@ -46,6 +47,27 @@ export function GalleryCard({ content }: GalleryCardProps) {
       toast.error(e.message || "Failed to post to Instagram");
     } finally {
       setPosting(false);
+    }
+  };
+
+  const handlePostToTikTok = async () => {
+    if (allImages.length === 0) {
+      toast.error("No images to post");
+      return;
+    }
+    setPostingTikTok(true);
+    try {
+      const caption = `${content.socialDescription}\n\n${content.tags.join(" ")}`;
+      const { data, error } = await supabase.functions.invoke("post-to-tiktok", {
+        body: { imageUrls: allImages, caption },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success("Posted to TikTok! 🎵");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to post to TikTok");
+    } finally {
+      setPostingTikTok(false);
     }
   };
 
