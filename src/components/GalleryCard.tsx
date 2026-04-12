@@ -1,4 +1,4 @@
-import { Heart, MessageCircle, Share2, Bookmark, Instagram } from "lucide-react";
+import { Heart, MessageCircle, Share2, Bookmark, Instagram, Music } from "lucide-react";
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from "@/components/ui/carousel";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
@@ -13,6 +13,7 @@ export function GalleryCard({ content }: GalleryCardProps) {
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [posting, setPosting] = useState(false);
+  const [postingTikTok, setPostingTikTok] = useState(false);
   const likes = Math.floor(Math.random() * 500) + 50;
 
   // Collect all images: hero first, then scene images
@@ -49,6 +50,27 @@ export function GalleryCard({ content }: GalleryCardProps) {
     }
   };
 
+  const handlePostToTikTok = async () => {
+    if (allImages.length === 0) {
+      toast.error("No images to post");
+      return;
+    }
+    setPostingTikTok(true);
+    try {
+      const caption = `${content.socialDescription}\n\n${content.tags.join(" ")}`;
+      const { data, error } = await supabase.functions.invoke("post-to-tiktok", {
+        body: { imageUrls: allImages, caption },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success("Posted to TikTok! 🎵");
+    } catch (e: any) {
+      toast.error(e.message || "Failed to post to TikTok");
+    } finally {
+      setPostingTikTok(false);
+    }
+  };
+
   return (
     <div className="bg-card rounded-lg overflow-hidden film-border animate-fade-up">
       {/* Header */}
@@ -68,7 +90,18 @@ export function GalleryCard({ content }: GalleryCardProps) {
           <CarouselContent className="-ml-0">
             {allImages.map((img, i) => (
               <CarouselItem key={i} className="pl-0">
-                <img src={img} alt={`Slide ${i + 1}`} className="w-full aspect-video object-cover" />
+                <div className="relative">
+                  <img src={img} alt={`Slide ${i + 1}`} className="w-full aspect-video object-cover" />
+                  {i === 0 && content.skit && (
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pt-10">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-sm">{content.style.icon}</span>
+                        <span className="text-[10px] font-mono text-white/70 uppercase tracking-wider">{content.style.label}</span>
+                      </div>
+                      <p className="text-xs font-mono text-white/90 leading-relaxed line-clamp-2">{content.skit.narrative}</p>
+                    </div>
+                  )}
+                </div>
               </CarouselItem>
             ))}
           </CarouselContent>
@@ -76,7 +109,18 @@ export function GalleryCard({ content }: GalleryCardProps) {
           <CarouselNext className="right-2 h-7 w-7 bg-background/70 border-0" />
         </Carousel>
       ) : allImages.length === 1 ? (
-        <img src={allImages[0]} alt={content.prompt} className="w-full aspect-video object-cover" />
+        <div className="relative">
+          <img src={allImages[0]} alt={content.prompt} className="w-full aspect-video object-cover" />
+          {content.skit && (
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pt-10">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-sm">{content.style.icon}</span>
+                <span className="text-[10px] font-mono text-white/70 uppercase tracking-wider">{content.style.label}</span>
+              </div>
+              <p className="text-xs font-mono text-white/90 leading-relaxed line-clamp-2">{content.skit.narrative}</p>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="w-full aspect-video bg-secondary flex items-center justify-center">
           <span className="text-4xl">{content.style.icon}</span>
@@ -116,6 +160,14 @@ export function GalleryCard({ content }: GalleryCardProps) {
               title="Post to Instagram"
             >
               <Instagram className={`w-5 h-5 ${posting ? "animate-pulse text-primary" : "text-foreground hover:text-primary"} transition-colors`} />
+            </button>
+            <button
+              onClick={handlePostToTikTok}
+              disabled={postingTikTok || allImages.length === 0}
+              className="transition-transform hover:scale-110 disabled:opacity-50"
+              title="Post to TikTok"
+            >
+              <Music className={`w-5 h-5 ${postingTikTok ? "animate-pulse text-primary" : "text-foreground hover:text-primary"} transition-colors`} />
             </button>
           </div>
           <button onClick={() => setSaved(!saved)} className="transition-transform hover:scale-110">

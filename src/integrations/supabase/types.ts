@@ -44,6 +44,33 @@ export type Database = {
         }
         Relationships: []
       }
+      tiktok_credentials: {
+        Row: {
+          access_token: string
+          created_at: string
+          id: string
+          tiktok_user_id: string
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          id?: string
+          tiktok_user_id: string
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          id?: string
+          tiktok_user_id?: string
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
