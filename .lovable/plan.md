@@ -1,35 +1,52 @@
 
 
-## Plan: Carousel at Top + Instagram Carousel Posting + Remove Storyboard
+## Plan: Title overlay on first slide + TikTok posting
 
-### What changes
+### 1. Add title overlay to the first carousel slide (GalleryCard.tsx)
 
-1. **GalleryCard.tsx — Move scene images carousel to the top (replacing hero image)**
-   - Replace the single hero image (lines 52-59) with a carousel of all available images: the hero image + up to 4 scene images
-   - Collect all images into an array (hero first, then scene images), display as a swipeable carousel with dot indicators and navigation arrows
-   - Remove the scene images carousel from inside the skit narrative section (lines 76-100)
-   - Remove the storyboard section entirely (lines 104-110)
+The first image in the carousel (hero image) will get a text overlay showing the skit narrative as the title. This will be a semi-transparent dark gradient at the bottom of the image with the style label and narrative text on top.
 
-2. **GalleryCard.tsx — Update Instagram posting to send all images for carousel post**
-   - Change `handlePostToInstagram` to pass an `imageUrls` array (hero + scene images) instead of a single `imageUrl`
+**Changes to `src/components/GalleryCard.tsx`:**
+- Wrap the first carousel item's image in a relative container
+- Add an absolute-positioned overlay with a bottom gradient containing:
+  - Style icon + label (e.g. "🎞️ 70s Mean Streets")
+  - Skit narrative as the title text
+- Apply the same overlay when there's only a single image
 
-3. **Edge function `post-to-instagram/index.ts` — Support carousel posting**
-   - Accept `imageUrls: string[]` in addition to `imageUrl: string` (backward compat)
-   - When multiple images: upload each to storage, create individual media containers with `is_carousel_item: true`, then create a carousel container via `POST /{ig-id}/media` with `media_type: "CAROUSEL"` and `children: [id1, id2, ...]`, poll status, then publish
+### 2. Add TikTok posting support
 
-4. **Remove `storyboardUrl` references** from the `GeneratedContent` type if no longer needed
+TikTok's Content Posting API allows uploading photos/videos. The flow:
 
-### Technical detail
+**New edge function `supabase/functions/post-to-tiktok/index.ts`:**
+- Accept `imageUrls` and `caption`
+- Use TikTok's Photo Upload API:
+  1. `POST /v2/post/publish/content/init/` with `post_info` and `source_info` containing the image URLs
+  2. TikTok handles the rest (no polling needed for photo posts)
+- Read TikTok access token from a `tiktok_credentials` table
 
-Instagram carousel API flow:
-1. For each image: `POST /{ig-id}/media` with `image_url`, `is_carousel_item: true` → get child container IDs
-2. Poll each child until `FINISHED`
-3. `POST /{ig-id}/media` with `media_type: "CAROUSEL"`, `children: [id1,id2,...]`, `caption` → carousel container ID
-4. Poll carousel container until `FINISHED`
-5. `POST /{ig-id}/media_publish` with `creation_id` → published
+**New database migration:**
+- Create `tiktok_credentials` table (same pattern as `instagram_credentials`): `id`, `access_token`, `tiktok_user_id`, `token_expires_at`, `created_at`, `updated_at`
+- RLS: no public policies (service_role only)
+
+**New edge function `supabase/functions/save-tiktok-token/index.ts`:**
+- Same pattern as `save-instagram-token`: accepts token + user ID, verifies against TikTok API, stores in DB
+
+**New component `src/components/TikTokConnect.tsx`:**
+- Manual token input form (same pattern as InstagramConnect)
+- Status display showing connection state
+
+**Update `src/components/GalleryCard.tsx`:**
+- Add TikTok icon button next to Instagram button
+- Call `post-to-tiktok` edge function with all images + caption
+
+**Update `src/pages/Index.tsx`:**
+- Add TikTokConnect component next to InstagramConnect
 
 ### Files modified
-- `src/components/GalleryCard.tsx`
-- `supabase/functions/post-to-instagram/index.ts`
-- `src/lib/cinematic-data.ts` (remove `storyboardUrl` from type)
+- `src/components/GalleryCard.tsx` — title overlay + TikTok button
+- `supabase/functions/post-to-tiktok/index.ts` (new)
+- `supabase/functions/save-tiktok-token/index.ts` (new)
+- `src/components/TikTokConnect.tsx` (new)
+- `src/pages/Index.tsx` — add TikTok connect
+- New migration for `tiktok_credentials` table
 
