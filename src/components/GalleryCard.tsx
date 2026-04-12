@@ -90,7 +90,18 @@ export function GalleryCard({ content }: GalleryCardProps) {
           <CarouselContent className="-ml-0">
             {allImages.map((img, i) => (
               <CarouselItem key={i} className="pl-0">
-                <img src={img} alt={`Slide ${i + 1}`} className="w-full aspect-video object-cover" />
+                <div className="relative">
+                  <img src={img} alt={`Slide ${i + 1}`} className="w-full aspect-video object-cover" />
+                  {i === 0 && content.skit && (
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pt-10">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-sm">{content.style.icon}</span>
+                        <span className="text-[10px] font-mono text-white/70 uppercase tracking-wider">{content.style.label}</span>
+                      </div>
+                      <p className="text-xs font-mono text-white/90 leading-relaxed line-clamp-2">{content.skit.narrative}</p>
+                    </div>
+                  )}
+                </div>
               </CarouselItem>
             ))}
           </CarouselContent>
@@ -98,7 +109,18 @@ export function GalleryCard({ content }: GalleryCardProps) {
           <CarouselNext className="right-2 h-7 w-7 bg-background/70 border-0" />
         </Carousel>
       ) : allImages.length === 1 ? (
-        <img src={allImages[0]} alt={content.prompt} className="w-full aspect-video object-cover" />
+        <div className="relative">
+          <img src={allImages[0]} alt={content.prompt} className="w-full aspect-video object-cover" />
+          {content.skit && (
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pt-10">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-sm">{content.style.icon}</span>
+                <span className="text-[10px] font-mono text-white/70 uppercase tracking-wider">{content.style.label}</span>
+              </div>
+              <p className="text-xs font-mono text-white/90 leading-relaxed line-clamp-2">{content.skit.narrative}</p>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="w-full aspect-video bg-secondary flex items-center justify-center">
           <span className="text-4xl">{content.style.icon}</span>
@@ -138,6 +160,14 @@ export function GalleryCard({ content }: GalleryCardProps) {
               title="Post to Instagram"
             >
               <Instagram className={`w-5 h-5 ${posting ? "animate-pulse text-primary" : "text-foreground hover:text-primary"} transition-colors`} />
+            </button>
+            <button
+              onClick={handlePostToTikTok}
+              disabled={postingTikTok || allImages.length === 0}
+              className="transition-transform hover:scale-110 disabled:opacity-50"
+              title="Post to TikTok"
+            >
+              <Music className={`w-5 h-5 ${postingTikTok ? "animate-pulse text-primary" : "text-foreground hover:text-primary"} transition-colors`} />
             </button>
           </div>
           <button onClick={() => setSaved(!saved)} className="transition-transform hover:scale-110">

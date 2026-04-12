@@ -3,6 +3,7 @@ import { Film, LayoutGrid, Play, Square, RotateCcw, FileImage, Sparkles, Loader2
 import { GeneratorView } from "@/components/GeneratorView";
 import { GalleryView } from "@/components/GalleryView";
 import { InstagramConnect } from "@/components/InstagramConnect";
+import { TikTokConnect } from "@/components/TikTokConnect";
 import { Button } from "@/components/ui/button";
 import { STYLES, generatePrompt, type GeneratedContent } from "@/lib/cinematic-data";
 import { toast } from "@/hooks/use-toast";
@@ -179,8 +180,9 @@ const Index = () => {
 
       {/* Instagram Connection + Controls */}
       <div className="max-w-2xl mx-auto pt-6 py-0 px-0 space-y-2">
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center gap-2">
           <InstagramConnect />
+          <TikTokConnect />
         </div>
         <div className="flex flex-wrap items-center justify-center p-3 rounded-lg border border-border bg-background/50 gap-2">
           {/* Single generate buttons */}
