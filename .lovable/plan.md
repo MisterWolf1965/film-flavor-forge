@@ -1,52 +1,29 @@
 
 
-## Plan: Title overlay on first slide + TikTok posting
+## Problem
 
-### 1. Add title overlay to the first carousel slide (GalleryCard.tsx)
+TikTok OAuth fails because the `redirect_uri` sent during authorization doesn't match what's registered in the TikTok Developer Portal. The app currently uses `window.location.origin` which produces the preview URL, but TikTok requires an exact match with the registered redirect URI.
 
-The first image in the carousel (hero image) will get a text overlay showing the skit narrative as the title. This will be a semi-transparent dark gradient at the bottom of the image with the style label and narrative text on top.
+## Solution
 
-**Changes to `src/components/GalleryCard.tsx`:**
-- Wrap the first carousel item's image in a relative container
-- Add an absolute-positioned overlay with a bottom gradient containing:
-  - Style icon + label (e.g. "🎞️ 70s Mean Streets")
-  - Skit narrative as the title text
-- Apply the same overlay when there's only a single image
+1. **Update `TikTokConnect.tsx`** to use a fixed, known redirect URI that matches what you register in TikTok's developer portal — instead of dynamically using `window.location.origin`.
 
-### 2. Add TikTok posting support
+2. **You need to register the correct redirect URI in your TikTok Developer Portal.** The URI must be your app's published or preview URL. Based on your project, this would be:
+   - `https://id-preview--1af35119-4342-493f-8daf-ef2156282097.lovable.app/`
 
-TikTok's Content Posting API allows uploading photos/videos. The flow:
+   Go to [TikTok Developer Portal](https://developers.tiktok.com/) → your app → Login Kit → **Redirect URI** → add the exact URL above.
 
-**New edge function `supabase/functions/post-to-tiktok/index.ts`:**
-- Accept `imageUrls` and `caption`
-- Use TikTok's Photo Upload API:
-  1. `POST /v2/post/publish/content/init/` with `post_info` and `source_info` containing the image URLs
-  2. TikTok handles the rest (no polling needed for photo posts)
-- Read TikTok access token from a `tiktok_credentials` table
+3. **Update the edge function** (`tiktok-oauth-callback`) to also use the same fixed redirect URI when exchanging the code, since TikTok requires the redirect_uri to match in both the authorize and token exchange steps.
 
-**New database migration:**
-- Create `tiktok_credentials` table (same pattern as `instagram_credentials`): `id`, `access_token`, `tiktok_user_id`, `token_expires_at`, `created_at`, `updated_at`
-- RLS: no public policies (service_role only)
+## Changes
 
-**New edge function `supabase/functions/save-tiktok-token/index.ts`:**
-- Same pattern as `save-instagram-token`: accepts token + user ID, verifies against TikTok API, stores in DB
+### `src/components/TikTokConnect.tsx`
+- Hardcode the redirect URI to match the registered one in TikTok's portal
+- Keep the auto-detection of `code` param from URL on redirect
 
-**New component `src/components/TikTokConnect.tsx`:**
-- Manual token input form (same pattern as InstagramConnect)
-- Status display showing connection state
+### `supabase/functions/tiktok-oauth-callback/index.ts`
+- Use the same hardcoded redirect URI for the token exchange (instead of accepting it from the client)
 
-**Update `src/components/GalleryCard.tsx`:**
-- Add TikTok icon button next to Instagram button
-- Call `post-to-tiktok` edge function with all images + caption
-
-**Update `src/pages/Index.tsx`:**
-- Add TikTokConnect component next to InstagramConnect
-
-### Files modified
-- `src/components/GalleryCard.tsx` — title overlay + TikTok button
-- `supabase/functions/post-to-tiktok/index.ts` (new)
-- `supabase/functions/save-tiktok-token/index.ts` (new)
-- `src/components/TikTokConnect.tsx` (new)
-- `src/pages/Index.tsx` — add TikTok connect
-- New migration for `tiktok_credentials` table
+## Important note
+The redirect URI registered in TikTok's developer portal must match **character for character** — including trailing slashes. If your other app is already using this redirect URI slot, you may need to update TikTok's settings to allow multiple redirect URIs (TikTok supports multiple).
 
