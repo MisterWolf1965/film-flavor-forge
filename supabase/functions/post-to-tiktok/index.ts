@@ -55,14 +55,13 @@ serve(async (req) => {
     const postData: Record<string, unknown> = {
       post_info: {
         title: caption.substring(0, 150),
-        description: caption,
-        privacy_level: "SELF_ONLY", // Start with private, user can change on TikTok
+        privacy_level: "SELF_ONLY",
         disable_comment: false,
-        auto_add_music: true,
       },
       source_info: {
         source: "PULL_FROM_URL",
         photo_images: imageUrls,
+        photo_cover_index: 0,
       },
       post_mode: "DIRECT_POST",
       media_type: "PHOTO",
