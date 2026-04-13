@@ -2,28 +2,49 @@
 
 ## Problem
 
-TikTok OAuth fails because the `redirect_uri` sent during authorization doesn't match what's registered in the TikTok Developer Portal. The app currently uses `window.location.origin` which produces the preview URL, but TikTok requires an exact match with the registered redirect URI.
+Two issues preventing TikTok posting:
 
-## Solution
+**1. Invalid API payload** — The `post_info` object contains fields TikTok doesn't accept for photo posts: `description` and `auto_add_music`. TikTok's Content Posting API only accepts `title`, `privacy_level`, `disable_comment`, `brand_content_toggle`, and `brand_organic_toggle` in `post_info`. This causes the "The request post info is empty or incorrect" error.
 
-1. **Update `TikTokConnect.tsx`** to use a fixed, known redirect URI that matches what you register in TikTok's developer portal — instead of dynamically using `window.location.origin`.
+**2. Domain verification required** — TikTok's Content Posting API requires verifying your domain. The second screenshot shows TikTok wants you to upload a verification `.txt` file to `https://preview--film-flavor-forge.lovable.app/`. We need to serve this file from the app.
 
-2. **You need to register the correct redirect URI in your TikTok Developer Portal.** The URI must be your app's published or preview URL. Based on your project, this would be:
-   - `https://id-preview--1af35119-4342-493f-8daf-ef2156282097.lovable.app/`
+## Plan
 
-   Go to [TikTok Developer Portal](https://developers.tiktok.com/) → your app → Login Kit → **Redirect URI** → add the exact URL above.
+### Step 1: Fix the TikTok API payload (`supabase/functions/post-to-tiktok/index.ts`)
 
-3. **Update the edge function** (`tiktok-oauth-callback`) to also use the same fixed redirect URI when exchanging the code, since TikTok requires the redirect_uri to match in both the authorize and token exchange steps.
+Remove invalid fields from `post_info`:
+- Remove `description`
+- Remove `auto_add_music`
+- Keep only `title`, `privacy_level`, `disable_comment`
 
-## Changes
+Also add `photo_cover_index: 0` to `source_info` (required field).
 
-### `src/components/TikTokConnect.tsx`
-- Hardcode the redirect URI to match the registered one in TikTok's portal
-- Keep the auto-detection of `code` param from URL on redirect
+### Step 2: Serve TikTok verification file
 
-### `supabase/functions/tiktok-oauth-callback/index.ts`
-- Use the same hardcoded redirect URI for the token exchange (instead of accepting it from the client)
+You need to download that verification `.txt` file from the TikTok Developer Portal and provide it to me. I will then place it in the `public/` directory so it's served at the root of your domain (e.g., `https://preview--film-flavor-forge.lovable.app/tiktokuVvQ0MvryWmq754APVBHTHkDmXYE2tdL.txt`).
 
-## Important note
-The redirect URI registered in TikTok's developer portal must match **character for character** — including trailing slashes. If your other app is already using this redirect URI slot, you may need to update TikTok's settings to allow multiple redirect URIs (TikTok supports multiple).
+After the file is deployed, click "Verify" in the TikTok Developer Portal.
+
+### Technical details
+
+The corrected payload will be:
+```text
+{
+  post_info: {
+    title: caption (max 150 chars),
+    privacy_level: "SELF_ONLY",
+    disable_comment: false
+  },
+  source_info: {
+    source: "PULL_FROM_URL",
+    photo_images: [...urls],
+    photo_cover_index: 0
+  },
+  post_mode: "DIRECT_POST",
+  media_type: "PHOTO"
+}
+```
+
+### Action needed from you
+Please download the TikTok verification file (`tiktokuVvQ0MvryWmq754APVBHTHkDmXYE2tdL.txt`) and upload it here so I can add it to the project.
 
