@@ -50,8 +50,8 @@ export function TikTokConnect() {
     checkStatus();
   }, []);
 
-  // Build the TikTok OAuth URL — redirect back to our app
-  const redirectUri = `${window.location.origin}/`;
+  // Fixed redirect URI — must match TikTok Developer Portal exactly
+  const redirectUri = "https://id-preview--1af35119-4342-493f-8daf-ef2156282097.lovable.app/";
   const tiktokAuthUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${TIKTOK_CLIENT_KEY}&scope=user.info.basic,video.upload,video.publish&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=tiktok_auth`;
 
   // Check URL for auth code on mount

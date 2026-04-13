@@ -13,7 +13,8 @@ serve(async (req) => {
   }
 
   try {
-    const { code, redirectUri } = await req.json();
+    const { code } = await req.json();
+    const redirectUri = "https://id-preview--1af35119-4342-493f-8daf-ef2156282097.lovable.app/";
 
     if (!code) {
       return new Response(
