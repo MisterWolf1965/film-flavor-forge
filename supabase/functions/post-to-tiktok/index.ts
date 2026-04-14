@@ -83,18 +83,23 @@ serve(async (req) => {
     console.log("TikTok API response:", JSON.stringify(result));
 
     if (result.error?.code) {
-      throw new Error(`TikTok API error: ${result.error.message || result.error.code}`);
+      console.error("TikTok API error details:", JSON.stringify(result));
+      console.error("Request payload was:", JSON.stringify(postData));
+      return new Response(
+        JSON.stringify({ ok: false, error: `TikTok API error: ${result.error.message || result.error.code}`, details: result }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     return new Response(
-      JSON.stringify({ success: true, publishId: result.data?.publish_id }),
+      JSON.stringify({ ok: true, success: true, publishId: result.data?.publish_id }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
     console.error("post-to-tiktok error:", e);
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ ok: false, error: e instanceof Error ? e.message : "Unknown error" }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
