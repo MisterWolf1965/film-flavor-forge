@@ -7,6 +7,33 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+async function uploadToStorage(
+  supabase: ReturnType<typeof createClient>,
+  imageUrl: string
+): Promise<string> {
+  if (imageUrl.startsWith("data:")) {
+    const base64Data = imageUrl.split(",")[1];
+    const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+    const fileName = `tt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+    const { error } = await supabase.storage
+      .from("instagram-images")
+      .upload(fileName, binaryData, { contentType: "image/jpeg", upsert: true });
+    if (error) throw new Error(`Upload failed: ${error.message}`);
+    return supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
+  } else if (imageUrl.startsWith("http")) {
+    const imgRes = await fetch(imageUrl);
+    if (!imgRes.ok) throw new Error("Failed to fetch image from URL");
+    const imgBlob = await imgRes.arrayBuffer();
+    const fileName = `tt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+    const { error } = await supabase.storage
+      .from("instagram-images")
+      .upload(fileName, new Uint8Array(imgBlob), { contentType: "image/jpeg", upsert: true });
+    if (error) throw new Error(`Upload failed: ${error.message}`);
+    return supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
+  }
+  throw new Error("Invalid image URL format");
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -34,6 +61,13 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // Upload all images to storage to get public JPG URLs
+    console.log(`Uploading ${imageUrls.length} image(s) to storage...`);
+    const publicUrls = await Promise.all(
+      imageUrls.map((url) => uploadToStorage(supabase, url))
+    );
+    console.log("Public URLs for TikTok:", publicUrls);
+
     // Get TikTok credentials
     const { data: creds, error: credError } = await supabase
       .from("tiktok_credentials")
@@ -50,7 +84,7 @@ serve(async (req) => {
     const accessToken = creds.access_token;
 
     // TikTok Content Posting API - Photo post
-    console.log(`Posting ${imageUrls.length} image(s) to TikTok...`);
+    console.log(`Posting ${publicUrls.length} image(s) to TikTok...`);
 
     const postData: Record<string, unknown> = {
       post_info: {
@@ -60,7 +94,7 @@ serve(async (req) => {
       },
       source_info: {
         source: "PULL_FROM_URL",
-        photo_images: imageUrls,
+        photo_images: publicUrls,
         photo_cover_index: 0,
       },
       post_mode: "DIRECT_POST",
