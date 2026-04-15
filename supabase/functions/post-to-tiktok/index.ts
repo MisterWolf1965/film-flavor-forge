@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,31 +8,60 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function uploadToStorage(
+/**
+ * Fetches image bytes from a data-URI or HTTP URL,
+ * converts PNG to JPEG using a free conversion API,
+ * uploads as real JPEG to storage, and returns the public URL.
+ */
+async function uploadAsJpeg(
   supabase: ReturnType<typeof createClient>,
   imageUrl: string
 ): Promise<string> {
+  let imageBytes: Uint8Array;
+
   if (imageUrl.startsWith("data:")) {
     const base64Data = imageUrl.split(",")[1];
-    const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-    const fileName = `tt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
-    const { error } = await supabase.storage
-      .from("instagram-images")
-      .upload(fileName, binaryData, { contentType: "image/jpeg", upsert: true });
-    if (error) throw new Error(`Upload failed: ${error.message}`);
-    return supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
+    imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
   } else if (imageUrl.startsWith("http")) {
     const imgRes = await fetch(imageUrl);
     if (!imgRes.ok) throw new Error("Failed to fetch image from URL");
-    const imgBlob = await imgRes.arrayBuffer();
-    const fileName = `tt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
-    const { error } = await supabase.storage
-      .from("instagram-images")
-      .upload(fileName, new Uint8Array(imgBlob), { contentType: "image/jpeg", upsert: true });
-    if (error) throw new Error(`Upload failed: ${error.message}`);
-    return supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
+    imageBytes = new Uint8Array(await imgRes.arrayBuffer());
+  } else {
+    throw new Error("Invalid image URL format");
   }
-  throw new Error("Invalid image URL format");
+
+  // Check if image is PNG (magic bytes: 89 50 4E 47)
+  const isPng =
+    imageBytes[0] === 0x89 &&
+    imageBytes[1] === 0x50 &&
+    imageBytes[2] === 0x4e &&
+    imageBytes[3] === 0x47;
+
+  if (isPng) {
+    console.log("Image is PNG — converting to JPEG via CloudConvert-free workaround...");
+    // Use a simple approach: re-encode via an image processing service
+    // We'll use the Lovable AI gateway with an image model to convert
+    // Actually, simplest: upload the PNG, then use a canvas-like approach
+    // In Deno we can use ImageMagick via a web service, or just use 
+    // the sharp-like approach. Let's use a minimal approach:
+    // Upload as PNG first, then use an external converter.
+    
+    // Alternative: Use the free png-to-jpeg conversion via fetch to a converter API
+    // Simplest Deno approach: use the `imagescript` library
+    const { Image } = await import("https://deno.land/x/imagescript@1.3.0/mod.ts");
+    const img = await Image.decode(imageBytes);
+    const jpegBytes = await img.encodeJPEG(85);
+    imageBytes = new Uint8Array(jpegBytes);
+    console.log("Converted PNG to JPEG, size:", imageBytes.length);
+  }
+
+  const fileName = `tt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await supabase.storage
+    .from("instagram-images")
+    .upload(fileName, imageBytes, { contentType: "image/jpeg", upsert: true });
+  if (error) throw new Error(`Upload failed: ${error.message}`);
+
+  return supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
 }
 
 serve(async (req) => {
@@ -61,12 +91,12 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Upload all images to storage to get public JPG URLs
-    console.log(`Uploading ${imageUrls.length} image(s) to storage...`);
+    // Upload all images as real JPEG to storage
+    console.log(`Processing ${imageUrls.length} image(s) — converting to JPEG and uploading...`);
     const publicUrls = await Promise.all(
-      imageUrls.map((url) => uploadToStorage(supabase, url))
+      imageUrls.map((url) => uploadAsJpeg(supabase, url))
     );
-    console.log("Public URLs for TikTok:", publicUrls);
+    console.log("Public JPEG URLs for TikTok:", publicUrls);
 
     // Get TikTok credentials
     const { data: creds, error: credError } = await supabase
@@ -84,11 +114,16 @@ serve(async (req) => {
     const accessToken = creds.access_token;
 
     // TikTok Content Posting API - Photo post
-    console.log(`Posting ${publicUrls.length} image(s) to TikTok...`);
+    // title max 150 chars, description for the longer text
+    const titleText = caption.substring(0, 150);
+    const descriptionText = caption.substring(0, 1000);
 
-    const postData: Record<string, unknown> = {
+    console.log(`Posting ${publicUrls.length} JPEG image(s) to TikTok...`);
+
+    const postData = {
       post_info: {
-        title: caption.substring(0, 150),
+        title: titleText,
+        description: descriptionText,
         privacy_level: "SELF_ONLY",
         disable_comment: false,
       },
