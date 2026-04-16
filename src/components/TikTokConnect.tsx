@@ -51,7 +51,7 @@ export function TikTokConnect() {
   }, []);
 
   // Fixed redirect URI — must match TikTok Developer Portal exactly
-  const redirectUri = "https://preview--film-flavor-forge.lovable.app/auth/callback";
+  const redirectUri = "https://film-flavor-forge.lovable.app/auth/callback";
   const tiktokAuthUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${TIKTOK_CLIENT_KEY}&scope=user.info.basic,video.upload,video.publish&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=tiktok_auth`;
 
   // Check URL for auth code on mount
@@ -79,7 +79,11 @@ export function TikTokConnect() {
       setAuthCode("");
       checkStatus();
     } catch (e) {
-      toast({ title: "Failed to connect TikTok", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+      toast({
+        title: "Failed to connect TikTok",
+        description: e instanceof Error ? e.message : "Unknown error",
+        variant: "destructive",
+      });
     } finally {
       setSaving(false);
     }
@@ -87,7 +91,11 @@ export function TikTokConnect() {
 
   const handleManualCodeSubmit = async () => {
     if (!authCode.trim()) {
-      toast({ title: "Missing code", description: "Paste the authorization code from TikTok.", variant: "destructive" });
+      toast({
+        title: "Missing code",
+        description: "Paste the authorization code from TikTok.",
+        variant: "destructive",
+      });
       return;
     }
     await handleExchangeCode(authCode.trim());
@@ -116,12 +124,15 @@ export function TikTokConnect() {
         <span className="text-xs font-mono text-muted-foreground">
           TikTok Connected
           {status.expiresAt && (
-            <span className="ml-1 opacity-60">
-              (expires {new Date(status.expiresAt).toLocaleDateString()})
-            </span>
+            <span className="ml-1 opacity-60">(expires {new Date(status.expiresAt).toLocaleDateString()})</span>
           )}
         </span>
-        <Button onClick={() => setShowCodeInput(true)} variant="ghost" size="sm" className="text-[10px] h-6 px-2 font-mono">
+        <Button
+          onClick={() => setShowCodeInput(true)}
+          variant="ghost"
+          size="sm"
+          className="text-[10px] h-6 px-2 font-mono"
+        >
           Reconnect
         </Button>
       </div>
