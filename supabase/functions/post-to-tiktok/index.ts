@@ -31,7 +31,6 @@ async function uploadAsJpeg(supabase: ReturnType<typeof createClient>, imageUrl:
   const isPng = imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4e && imageBytes[3] === 0x47;
 
   if (isPng) {
-    console.log("Image is PNG — converting to JPEG...");
     const { Image } = await import("https://deno.land/x/imagescript@1.3.0/mod.ts");
     const img = await Image.decode(imageBytes);
     const jpegBytes = await img.encodeJPEG(85);
@@ -48,6 +47,9 @@ async function uploadAsJpeg(supabase: ReturnType<typeof createClient>, imageUrl:
   return supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
 }
 
+/**
+ * UPDATED: Added rigorous error handling for TikTok's creator info endpoint
+ */
 async function fetchCreatorInfo(accessToken: string) {
   try {
     const creatorRes = await fetch("https://open.tiktokapis.com/v2/post/publish/creator_info/query/", {
@@ -58,50 +60,51 @@ async function fetchCreatorInfo(accessToken: string) {
       },
       body: JSON.stringify({}),
     });
-    return await creatorRes.json();
+
+    if (!creatorRes.ok) return null;
+    const data = await creatorRes.json();
+    return data;
   } catch (e) {
-    console.error("Creator info fetch failed:", e);
+    console.error("TikTok Creator Info Check Failed:", e);
     return null;
   }
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
     const body = await req.json();
-    const caption = body.caption || "New Post";
+    const caption = body.caption || "Micro short film moment";
     let imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : body.imageUrl ? [body.imageUrl] : [];
 
     if (imageUrls.length === 0) throw new Error("No images provided");
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // 1. Storage Upload
+    // 1. Image Processing
     const publicUrls = await Promise.all(imageUrls.map((url) => uploadAsJpeg(supabase, url)));
 
-    // 2. Credentials
+    // 2. Fetch Token
     const { data: creds } = await supabase.from("tiktok_credentials").select("*").maybeSingle();
     if (!creds) throw new Error("TikTok credentials missing.");
 
-    const accessToken = creds.access_token;
-
-    // 3. Privacy Handshake
+    // 3. Handshake Logic
     let privacyLevel = "SELF_ONLY";
-    let postMode = "MEDIA_UPLOAD"; // Default to Inbox for safety
+    let postMode = "MEDIA_UPLOAD"; // Inbox/Draft method
 
-    const creatorResult = await fetchCreatorInfo(accessToken);
+    const creatorResult = await fetchCreatorInfo(creds.access_token);
+
+    // Check if we actually got valid data back
     if (creatorResult?.data?.privacy_level_options) {
       const options = creatorResult.data.privacy_level_options;
       if (options.includes("PUBLIC_TO_EVERYONE")) {
         privacyLevel = "PUBLIC_TO_EVERYONE";
-        postMode = "DIRECT_POST"; // Only attempt direct post if we have permissions
+        postMode = "DIRECT_POST";
       }
     }
 
-    // 4. Final Payload
+    // 4. Construct Payload
     const normalizedCaption = normalizeText(caption);
     const postData = {
       post_info: {
@@ -118,12 +121,12 @@ serve(async (req) => {
       media_type: "PHOTO",
     };
 
-    console.log(`Submitting to TikTok via ${postMode}...`);
+    console.log(`Submitting via ${postMode}...`);
 
     const res = await fetch("https://open.tiktokapis.com/v2/post/publish/content/init/", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${creds.access_token}`,
         "Content-Type": "application/json; charset=UTF-8",
       },
       body: JSON.stringify(postData),
@@ -132,16 +135,14 @@ serve(async (req) => {
     const result = await res.json();
 
     if (result.error?.code) {
-      return new Response(JSON.stringify({ ok: false, error: result.error.message }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      throw new Error(`TikTok API Error: ${result.error.message}`);
     }
 
-    return new Response(JSON.stringify({ ok: true, publishId: result.data?.publish_id, mode: postMode }), {
+    return new Response(JSON.stringify({ ok: true, publishId: result.data?.publish_id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
+    console.error("Final Error:", e.message);
     return new Response(JSON.stringify({ ok: false, error: e.message }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
