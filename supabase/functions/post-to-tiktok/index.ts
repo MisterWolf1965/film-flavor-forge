@@ -124,15 +124,13 @@ serve(async (req) => {
       post_info: {
         title: titleText,
         description: descriptionText,
-        privacy_level: "SELF_ONLY",
-        disable_comment: false,
       },
       source_info: {
         source: "PULL_FROM_URL",
         photo_images: publicUrls,
         photo_cover_index: 0,
       },
-      post_mode: "DIRECT_POST",
+      post_mode: "MEDIA_UPLOAD",
       media_type: "PHOTO",
     };
 
