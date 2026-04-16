@@ -14,23 +14,23 @@ serve(async (req) => {
 
   try {
     const { code } = await req.json();
-    const redirectUri = "https://preview--film-flavor-forge.lovable.app/auth/callback";
+    const redirectUri = "https://film-flavor-forge.lovable.app/auth/callback";
 
     if (!code) {
-      return new Response(
-        JSON.stringify({ error: "Authorization code is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Authorization code is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const clientKey = Deno.env.get("TIKTOK_CLIENT_KEY");
     const clientSecret = Deno.env.get("TIKTOK_CLIENT_SECRET");
 
     if (!clientKey || !clientSecret) {
-      return new Response(
-        JSON.stringify({ error: "TikTok client credentials not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "TikTok client credentials not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Exchange authorization code for access token
@@ -52,10 +52,10 @@ serve(async (req) => {
 
     if (tokenData.error || !tokenData.access_token) {
       const errMsg = tokenData.error_description || tokenData.error || "Failed to get access token";
-      return new Response(
-        JSON.stringify({ error: errMsg }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: errMsg }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const accessToken = tokenData.access_token;
@@ -63,10 +63,9 @@ serve(async (req) => {
     const expiresIn = tokenData.expires_in || 86400;
 
     // Fetch user info for display
-    const userRes = await fetch(
-      "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name",
-      { headers: { "Authorization": `Bearer ${accessToken}` } }
-    );
+    const userRes = await fetch("https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
     const userData = await userRes.json();
     const displayName = userData.data?.user?.display_name || openId;
 
@@ -88,15 +87,14 @@ serve(async (req) => {
 
     if (insertError) throw new Error(`DB insert failed: ${insertError.message}`);
 
-    return new Response(
-      JSON.stringify({ success: true, displayName, openId }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ success: true, displayName, openId }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (e) {
     console.error("tiktok-oauth-callback error:", e);
-    return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
