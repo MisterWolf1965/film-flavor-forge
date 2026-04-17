@@ -13,7 +13,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter basename="/film-flavor-forge">
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth/callback" element={<Index />} />
