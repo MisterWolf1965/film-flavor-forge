@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Redirecting…</title>
+    <script>
+      const pathParts = location.pathname.split('/');
+      const depth = pathParts.length - 2;
+      let indexPath = '';
+      for (let i = 0; i < depth; i++) {
+        indexPath += '../';
+      }
+      indexPath += 'index.html';
+
+      fetch(indexPath)
+        .then((response) => response.text())
+        .then((html) => {
+          document.open();
+          document.write(html);
+          document.close();
+          history.replaceState(null, '', location.pathname + location.search + location.hash);
+        })
+        .catch(() => {
+          document.body.textContent = 'Page not found.';
+        });
+    </script>
+  </head>
+  <body>
+    Redirecting...
+  </body>
+</html>
