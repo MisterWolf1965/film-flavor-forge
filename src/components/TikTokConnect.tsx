@@ -11,7 +11,7 @@ interface TikTokStatus {
   expiresAt?: string;
 }
 
-const TIKTOK_CLIENT_KEY = "sbaw38iz0q3h0sm8ga";
+const TIKTOK_CLIENT_KEY = import.meta.env.VITE_TIKTOK_CLIENT_KEY || "sbaw38iz0q3h0sm8ga";
 
 export function TikTokConnect() {
   const [status, setStatus] = useState<TikTokStatus | null>(null);
@@ -51,7 +51,7 @@ export function TikTokConnect() {
   }, []);
 
   // Fixed redirect URI — must match TikTok Developer Portal exactly
-  const redirectUri = "https://film-flavor-forge.lovable.app/auth/callback";
+  const redirectUri = import.meta.env.VITE_TIKTOK_REDIRECT_URI || `${window.location.origin}/auth/callback`;
   const tiktokAuthUrl = `https://www.tiktok.com/v2/auth/authorize/?client_key=${TIKTOK_CLIENT_KEY}&scope=user.info.basic,video.upload,video.publish&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=tiktok_auth`;
 
   // Check URL for auth code on mount

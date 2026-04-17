@@ -71,3 +71,11 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### Deploying to a stable URL for TikTok verification
+
+This app can be deployed to a stable public host so TikTok can verify your site and redirect URI correctly.
+
+- `VITE_TIKTOK_REDIRECT_URI`: Set this to the exact deployed callback URL, for example `https://your-domain.com/auth/callback`.
+- `VITE_BASE`: Set this to `/<repo-name>/` when deploying to GitHub Pages from the repository name.
+
+GitHub Pages is one suitable option for a stable URL, and the repository contains a GitHub Actions deployment workflow that publishes the built app automatically.
