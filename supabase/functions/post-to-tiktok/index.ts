@@ -89,22 +89,21 @@ serve(async (req) => {
     const { data: creds } = await supabase.from("tiktok_credentials").select("*").maybeSingle();
     if (!creds) throw new Error("TikTok credentials missing.");
 
-    // 3. Handshake Logic
+    // 3. Privacy / Mode
+    // Unaudited / sandbox apps MUST use SELF_ONLY privacy.
+    // Once your app is audited by TikTok, set TIKTOK_APP_AUDITED=true to enable PUBLIC_TO_EVERYONE.
+    const audited = (Deno.env.get("TIKTOK_APP_AUDITED") || "").toLowerCase() === "true";
+
     let privacyLevel = "SELF_ONLY";
-    let postMode = "MEDIA_UPLOAD"; // Inbox/Draft method
-
-    const creatorResult = await fetchCreatorInfo(creds.access_token);
-
-    // Check if we actually got valid data back
-    if (creatorResult?.data?.privacy_level_options) {
-      const options = creatorResult.data.privacy_level_options;
-      if (options.includes("PUBLIC_TO_EVERYONE")) {
+    if (audited) {
+      const creatorResult = await fetchCreatorInfo(creds.access_token);
+      const options = creatorResult?.data?.privacy_level_options as string[] | undefined;
+      if (options?.includes("PUBLIC_TO_EVERYONE")) {
         privacyLevel = "PUBLIC_TO_EVERYONE";
-        postMode = "DIRECT_POST";
       }
     }
 
-    // 4. Construct Payload
+    // 4. Construct Payload — DIRECT_POST works with SELF_ONLY for unaudited apps
     const normalizedCaption = normalizeText(caption);
     const postData = {
       post_info: {
@@ -117,11 +116,11 @@ serve(async (req) => {
         photo_images: publicUrls,
         photo_cover_index: 0,
       },
-      post_mode: postMode,
+      post_mode: "DIRECT_POST",
       media_type: "PHOTO",
     };
 
-    console.log(`Submitting via ${postMode}...`);
+    console.log(`Submitting via DIRECT_POST with privacy=${privacyLevel} (audited=${audited})...`);
 
     const res = await fetch("https://open.tiktokapis.com/v2/post/publish/content/init/", {
       method: "POST",
@@ -134,8 +133,11 @@ serve(async (req) => {
 
     const result = await res.json();
 
-    if (result.error?.code) {
-      throw new Error(`TikTok API Error: ${result.error.message}`);
+    if (result.error?.code && result.error.code !== "ok") {
+      const hint = !audited
+        ? " (Hint: TikTok app is in sandbox mode — posts will be drafts/private. Get your app audited and set TIKTOK_APP_AUDITED=true to publish publicly.)"
+        : "";
+      throw new Error(`TikTok API Error: ${result.error.message}${hint}`);
     }
 
     return new Response(JSON.stringify({ ok: true, publishId: result.data?.publish_id }), {
