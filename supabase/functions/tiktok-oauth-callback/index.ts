@@ -105,29 +105,38 @@ serve(async (req) => {
       });
     }
 
-    const userRes = await fetch("https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-    });
-
-    const userData = await userRes.json().catch(() => null);
-    if (!userRes.ok || userData?.error?.code) {
-      return respond({
-        ok: false,
-        error: userData?.error?.message || "Failed to fetch TikTok user info",
-        diagnostics: {
-          stage: "fetch_user_info",
+    // Try to fetch display name, but don't fail the whole flow if TikTok rejects it.
+    // Some scope/region combos return error code "scope_not_authorized" for user.info.basic
+    // even when video.upload/publish work fine. We already have open_id from the token response.
+    let displayName = "TikTok user";
+    let userInfoDiagnostics: Record<string, unknown> | undefined;
+    try {
+      const userRes = await fetch(
+        "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: "application/json",
+          },
+        },
+      );
+      const userData = await userRes.json().catch(() => null);
+      if (userRes.ok && userData?.data?.user?.display_name) {
+        displayName = userData.data.user.display_name;
+      } else {
+        userInfoDiagnostics = {
+          stage: "fetch_user_info_skipped",
           status: userRes.status,
           payload: userData,
-        },
-      });
+        };
+        console.warn("TikTok user info unavailable, continuing with open_id only", userInfoDiagnostics);
+      }
+    } catch (e) {
+      console.warn("TikTok user info fetch threw, continuing with open_id only", e);
     }
 
-    const tiktokUserId = userData?.data?.user?.open_id || openId;
-    const displayName = userData?.data?.user?.display_name || "TikTok user";
+    const tiktokUserId = openId;
     const expiresAt = expiresIn > 0
       ? new Date(Date.now() + expiresIn * 1000).toISOString()
       : null;
