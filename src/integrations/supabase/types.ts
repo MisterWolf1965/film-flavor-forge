@@ -73,7 +73,57 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      instagram_connection_status: {
+        Row: {
+          created_at: string | null
+          facebook_user_id: string | null
+          id: string | null
+          instagram_account_id: string | null
+          token_expires_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          facebook_user_id?: string | null
+          id?: string | null
+          instagram_account_id?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          facebook_user_id?: string | null
+          id?: string | null
+          instagram_account_id?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      tiktok_connection_status: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          tiktok_user_id: string | null
+          token_expires_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          tiktok_user_id?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          tiktok_user_id?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
