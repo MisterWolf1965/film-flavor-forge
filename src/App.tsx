@@ -13,7 +13,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter basename="/film-flavor-forge">
+      <BrowserRouter basename={import.meta.env.PROD && window.location.pathname.startsWith("/film-flavor-forge") ? "/film-flavor-forge" : "/"}>
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth/callback" element={<Index />} />
