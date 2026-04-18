@@ -103,26 +103,38 @@ serve(async (req) => {
       }
     }
 
-    // 4. Construct Payload — DIRECT_POST works with SELF_ONLY for unaudited apps
+    // 4. Construct Payload
+    // Unaudited apps MUST use MEDIA_UPLOAD (inbox draft) — DIRECT_POST is rejected
+    // with "integration guidelines" error even when privacy_level=SELF_ONLY.
+    // Audited apps can use DIRECT_POST + PUBLIC_TO_EVERYONE.
     const normalizedCaption = normalizeText(caption);
-    const postData = {
-      post_info: {
-        title: normalizedCaption.slice(0, TIKTOK_TITLE_MAX_LENGTH) || "New Post",
-        description: normalizedCaption.slice(0, TIKTOK_DESCRIPTION_MAX_LENGTH),
-        privacy_level: privacyLevel,
-      },
+    const useDirectPost = audited;
+
+    const postData: Record<string, unknown> = {
       source_info: {
         source: "PULL_FROM_URL",
         photo_images: publicUrls,
         photo_cover_index: 0,
       },
-      post_mode: "DIRECT_POST",
       media_type: "PHOTO",
+      post_mode: useDirectPost ? "DIRECT_POST" : "MEDIA_UPLOAD",
     };
 
-    console.log(`Submitting via DIRECT_POST with privacy=${privacyLevel} (audited=${audited})...`);
+    if (useDirectPost) {
+      postData.post_info = {
+        title: normalizedCaption.slice(0, TIKTOK_TITLE_MAX_LENGTH) || "New Post",
+        description: normalizedCaption.slice(0, TIKTOK_DESCRIPTION_MAX_LENGTH),
+        privacy_level: privacyLevel,
+      };
+    }
 
-    const res = await fetch("https://open.tiktokapis.com/v2/post/publish/content/init/", {
+    const endpoint = useDirectPost
+      ? "https://open.tiktokapis.com/v2/post/publish/content/init/"
+      : "https://open.tiktokapis.com/v2/post/publish/inbox/photo/init/";
+
+    console.log(`Submitting via ${postData.post_mode} (audited=${audited}) to ${endpoint}`);
+
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${creds.access_token}`,
