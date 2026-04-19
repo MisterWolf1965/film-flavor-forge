@@ -1,10 +1,38 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+async function uploadDataUrlToStorage(dataUrl: string): Promise<string> {
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+  );
+
+  // dataUrl looks like: data:image/png;base64,XXXX
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+  if (!match) {
+    throw new Error("Invalid data URL returned from AI");
+  }
+  const contentType = match[1];
+  const base64 = match[2];
+  const ext = contentType.includes("png") ? "png" : contentType.includes("jpeg") ? "jpg" : "bin";
+
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const fileName = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+
+  const { error } = await supabase.storage
+    .from("instagram-images")
+    .upload(fileName, bytes, { contentType, upsert: true });
+
+  if (error) throw new Error(`Storage upload failed: ${error.message}`);
+
+  return supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -82,11 +110,24 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    const rawImageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
 
-    if (!imageUrl) {
+    if (!rawImageUrl) {
       console.error("No image in response:", JSON.stringify(data).substring(0, 500));
       throw new Error("No image generated");
+    }
+
+    // Upload base64 to storage and return a short public URL.
+    // This keeps response payloads small for downstream callers (TikTok/IG posting).
+    let imageUrl = rawImageUrl;
+    if (rawImageUrl.startsWith("data:")) {
+      try {
+        imageUrl = await uploadDataUrlToStorage(rawImageUrl);
+        console.log("Uploaded generated image to storage:", imageUrl);
+      } catch (uploadErr) {
+        console.error("Storage upload failed, falling back to data URL:", uploadErr);
+        // Fallback: still return data URL so generation isn't lost
+      }
     }
 
     return new Response(

@@ -26,6 +26,13 @@ async function uploadToStorage(
   supabase: ReturnType<typeof createClient>,
   imageUrl: string
 ): Promise<string> {
+  // Fast path: already a hosted public URL (from generate-image storage upload).
+  // Skip re-upload entirely — Instagram pulls directly from the URL.
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+    return imageUrl;
+  }
+
+  // Fallback: legacy base64 data URL — upload to storage.
   if (imageUrl.startsWith("data:")) {
     const base64Data = imageUrl.split(",")[1];
     const binaryData = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
@@ -33,16 +40,6 @@ async function uploadToStorage(
     const { error } = await supabase.storage
       .from("instagram-images")
       .upload(fileName, binaryData, { contentType: "image/png", upsert: true });
-    if (error) throw new Error(`Upload failed: ${error.message}`);
-    return supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
-  } else if (imageUrl.startsWith("http")) {
-    const imgRes = await fetch(imageUrl);
-    if (!imgRes.ok) throw new Error("Failed to fetch image from URL");
-    const imgBlob = await imgRes.arrayBuffer();
-    const fileName = `ig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
-    const { error } = await supabase.storage
-      .from("instagram-images")
-      .upload(fileName, new Uint8Array(imgBlob), { contentType: "image/jpeg", upsert: true });
     if (error) throw new Error(`Upload failed: ${error.message}`);
     return supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
   }
