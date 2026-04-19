@@ -2,49 +2,37 @@
 
 ## Problem
 
-Two issues preventing TikTok posting:
+The "Unexpected token '<'" error happens because the request body to `post-to-tiktok` (and `post-to-instagram`) is too large. The app currently passes 5 base64 image data URLs (hero + 4 scenes, ~1–3 MB each = 5–15 MB total) directly in the JSON body. Supabase's edge gateway returns an HTML error page for oversized payloads, which the client tries to parse as JSON and fails on the leading `<`.
 
-**1. Invalid API payload** — The `post_info` object contains fields TikTok doesn't accept for photo posts: `description` and `auto_add_music`. TikTok's Content Posting API only accepts `title`, `privacy_level`, `disable_comment`, `brand_content_toggle`, and `brand_organic_toggle` in `post_info`. This causes the "The request post info is empty or incorrect" error.
+The post functions then re-upload those same data URLs to storage anyway — wasted work that also blows past the request limit.
 
-**2. Domain verification required** — TikTok's Content Posting API requires verifying your domain. The second screenshot shows TikTok wants you to upload a verification `.txt` file to `https://preview--film-flavor-forge.lovable.app/`. We need to serve this file from the app.
+## Fix
 
-## Plan
+Move the storage upload to **generation time**, so generated images are stored once and only short public URLs travel through the rest of the app.
 
-### Step 1: Fix the TikTok API payload (`supabase/functions/post-to-tiktok/index.ts`)
+### 1. `supabase/functions/generate-image/index.ts`
+- After receiving the base64 image from Lovable AI, upload it to the `instagram-images` bucket (already public) using the service-role key.
+- Return `{ imageUrl: <publicUrl> }` instead of the base64 data URL.
+- Keep response shape identical so callers don't change.
 
-Remove invalid fields from `post_info`:
-- Remove `description`
-- Remove `auto_add_music`
-- Keep only `title`, `privacy_level`, `disable_comment`
+### 2. `supabase/functions/post-to-tiktok/index.ts`
+- Skip re-upload when the incoming `imageUrls` are already `https://…supabase.co/storage/...` URLs from our bucket — pass them straight to TikTok.
+- Keep the PNG→JPEG conversion path only for legacy `data:` inputs (defensive fallback).
 
-Also add `photo_cover_index: 0` to `source_info` (required field).
+### 3. `supabase/functions/post-to-instagram/index.ts`
+- Same: detect already-hosted public URLs and skip re-upload; only handle `data:` as fallback.
 
-### Step 2: Serve TikTok verification file
+### 4. Client (`GalleryCard.tsx`)
+- No changes needed — it already passes `content.imageUrl` / `content.sceneImages`, which will now be public URLs.
 
-You need to download that verification `.txt` file from the TikTok Developer Portal and provide it to me. I will then place it in the `public/` directory so it's served at the root of your domain (e.g., `https://preview--film-flavor-forge.lovable.app/tiktokuVvQ0MvryWmq754APVBHTHkDmXYE2tdL.txt`).
+## Why this works
 
-After the file is deployed, click "Verify" in the TikTok Developer Portal.
+- Request body shrinks from ~10 MB to ~1 KB (just five short URLs + caption), well under any gateway limit.
+- TikTok and Instagram both require `PULL_FROM_URL` style hosted images anyway, so no behavior change downstream.
+- Existing `instagram-images` bucket and storage policies are reused.
 
-### Technical details
+## Out of scope
 
-The corrected payload will be:
-```text
-{
-  post_info: {
-    title: caption (max 150 chars),
-    privacy_level: "SELF_ONLY",
-    disable_comment: false
-  },
-  source_info: {
-    source: "PULL_FROM_URL",
-    photo_images: [...urls],
-    photo_cover_index: 0
-  },
-  post_mode: "DIRECT_POST",
-  media_type: "PHOTO"
-}
-```
-
-### Action needed from you
-Please download the TikTok verification file (`tiktokuVvQ0MvryWmq754APVBHTHkDmXYE2tdL.txt`) and upload it here so I can add it to the project.
+- Security findings (RLS on credentials, anon upload policy, APP_SECRET on edge functions) — flagged in the security panel but not part of this bug.
+- TikTok app audit / public posting — separate workflow.
 
