@@ -14,22 +14,27 @@ function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-async function uploadAsJpeg(supabase: ReturnType<typeof createClient>, imageUrl: string): Promise<string> {
-  let imageBytes: Uint8Array;
+function isHostedPublicUrl(url: string): boolean {
+  // Already a public URL from our storage bucket — no re-processing needed.
+  return url.startsWith("http://") || url.startsWith("https://");
+}
 
-  if (imageUrl.startsWith("data:")) {
-    const base64Data = imageUrl.split(",")[1];
-    imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-  } else if (imageUrl.startsWith("http")) {
-    const imgRes = await fetch(imageUrl);
-    if (!imgRes.ok) throw new Error("Failed to fetch image from URL");
-    imageBytes = new Uint8Array(await imgRes.arrayBuffer());
-  } else {
+async function ensureJpegPublicUrl(
+  supabase: ReturnType<typeof createClient>,
+  imageUrl: string
+): Promise<string> {
+  // Fast path: already a hosted URL (from generate-image storage upload).
+  if (isHostedPublicUrl(imageUrl)) return imageUrl;
+
+  // Fallback: legacy base64 data URL — convert to JPEG and upload.
+  if (!imageUrl.startsWith("data:")) {
     throw new Error("Invalid image URL format");
   }
 
-  const isPng = imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4e && imageBytes[3] === 0x47;
+  const base64Data = imageUrl.split(",")[1];
+  let imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
 
+  const isPng = imageBytes[0] === 0x89 && imageBytes[1] === 0x50 && imageBytes[2] === 0x4e && imageBytes[3] === 0x47;
   if (isPng) {
     const { Image } = await import("https://deno.land/x/imagescript@1.3.0/mod.ts");
     const img = await Image.decode(imageBytes);
@@ -43,7 +48,6 @@ async function uploadAsJpeg(supabase: ReturnType<typeof createClient>, imageUrl:
     .upload(fileName, imageBytes, { contentType: "image/jpeg", upsert: true });
 
   if (error) throw new Error(`Upload failed: ${error.message}`);
-
   return supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
 }
 
@@ -82,8 +86,8 @@ serve(async (req) => {
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // 1. Image Processing
-    const publicUrls = await Promise.all(imageUrls.map((url) => uploadAsJpeg(supabase, url)));
+    // 1. Image Processing — skip re-upload for already hosted URLs
+    const publicUrls = await Promise.all(imageUrls.map((url) => ensureJpegPublicUrl(supabase, url)));
 
     // 2. Fetch Token
     const { data: creds } = await supabase.from("tiktok_credentials").select("*").maybeSingle();
