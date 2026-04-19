@@ -1,38 +1,96 @@
 
+## Diagnosis
 
-## Problem
+The new network details change the diagnosis:
 
-The "Unexpected token '<'" error happens because the request body to `post-to-tiktok` (and `post-to-instagram`) is too large. The app currently passes 5 base64 image data URLs (hero + 4 scenes, ~1–3 MB each = 5–15 MB total) directly in the JSON body. Supabase's edge gateway returns an HTML error page for oversized payloads, which the client tries to parse as JSON and fails on the leading `<`.
+- The client request to `post-to-tiktok` is now small (`Content-Length: 693`), so the old oversized-payload problem is no longer the active failure.
+- The edge function itself returns JSON (`content-type: application/json`, body ~82 bytes), so the browser is not failing to parse HTML anymore.
+- The actual HTML parse error is happening inside `supabase/functions/post-to-tiktok/index.ts` at:
+  - `const result = await res.json();`
+- The TikTok upstream endpoint is returning HTML, and the function is trying to parse it as JSON. That is why the UI still shows:
+  - `Unexpected token '<', "<html> <h"... is not valid JSON`
 
-The post functions then re-upload those same data URLs to storage anyway — wasted work that also blows past the request limit.
+## What to change
 
-## Fix
+### 1. Harden `post-to-tiktok` response parsing
+Update `supabase/functions/post-to-tiktok/index.ts` so it never blindly calls `res.json()`.
 
-Move the storage upload to **generation time**, so generated images are stored once and only short public URLs travel through the rest of the app.
+Implementation:
+- Read `content-type` first.
+- Read the response as text.
+- If the response is JSON, parse it safely.
+- If it is HTML or plain text, return a structured JSON error to the app with diagnostics:
+  - upstream status
+  - upstream content type
+  - endpoint used
+  - post mode used
+  - first part of the response body
+  - whether images were hosted URLs
 
-### 1. `supabase/functions/generate-image/index.ts`
-- After receiving the base64 image from Lovable AI, upload it to the `instagram-images` bucket (already public) using the service-role key.
-- Return `{ imageUrl: <publicUrl> }` instead of the base64 data URL.
-- Keep response shape identical so callers don't change.
+This will replace the vague parse error with the real TikTok failure reason.
 
-### 2. `supabase/functions/post-to-tiktok/index.ts`
-- Skip re-upload when the incoming `imageUrls` are already `https://…supabase.co/storage/...` URLs from our bucket — pass them straight to TikTok.
-- Keep the PNG→JPEG conversion path only for legacy `data:` inputs (defensive fallback).
+### 2. Align the TikTok payload with the documented shape
+The current payload likely still does not match what TikTok expects for photo posting.
 
-### 3. `supabase/functions/post-to-instagram/index.ts`
-- Same: detect already-hosted public URLs and skip re-upload; only handle `data:` as fallback.
+I will revise the payload rules in `post-to-tiktok/index.ts`:
+- keep `source_info.photo_images` and `photo_cover_index`
+- keep sandbox flow on the inbox/media-upload route
+- remove fields TikTok may reject in the chosen mode
+- use only fields confirmed for that mode
+- if direct-post is used later, keep only supported `post_info` fields
 
-### 4. Client (`GalleryCard.tsx`)
-- No changes needed — it already passes `content.imageUrl` / `content.sceneImages`, which will now be public URLs.
+Important detail from project memory:
+- TikTok payload support is strict
+- unsupported fields such as `description` can trigger API errors
+- `title` length noted in memory differs from the current constant, so I will normalize to the documented/working limit and supported fields only
 
-## Why this works
+### 3. Add explicit upstream diagnostics instead of generic failure
+Extend the function to return responses like:
 
-- Request body shrinks from ~10 MB to ~1 KB (just five short URLs + caption), well under any gateway limit.
-- TikTok and Instagram both require `PULL_FROM_URL` style hosted images anyway, so no behavior change downstream.
-- Existing `instagram-images` bucket and storage policies are reused.
+```text
+{
+  ok: false,
+  error: "TikTok upstream returned non-JSON response",
+  diagnostics: {
+    status,
+    contentType,
+    endpoint,
+    postMode,
+    responsePreview
+  }
+}
+```
 
-## Out of scope
+This makes future debugging immediate and prevents another blind error loop.
 
-- Security findings (RLS on credentials, anon upload policy, APP_SECRET on edge functions) — flagged in the security panel but not part of this bug.
-- TikTok app audit / public posting — separate workflow.
+### 4. Preserve the small-payload fix
+Keep the generation-time upload / hosted-URL flow already introduced:
+- `generate-image` continues returning hosted image URLs
+- `post-to-tiktok` continues skipping re-upload for hosted URLs
+- `post-to-instagram` can stay as-is unless I also mirror the same safe upstream parsing there for consistency
 
+## Expected outcome
+
+After this change:
+- the app will no longer surface the misleading HTML parse error
+- we’ll see the real TikTok rejection reason in the UI/logs
+- sandbox photo posting will either work, or fail with a precise actionable message
+- no regression to large request bodies
+
+## Files to update
+
+- `supabase/functions/post-to-tiktok/index.ts`
+- optionally `supabase/functions/post-to-instagram/index.ts` for the same safe upstream parsing pattern
+
+## No backend schema changes needed
+
+- No table changes
+- No auth changes
+- No storage changes
+
+## Verification after implementation
+
+1. Test TikTok upload with an AI-generated card
+2. Test TikTok upload with a placeholder card
+3. Confirm the edge function returns structured JSON in both success and failure cases
+4. Confirm the UI shows the real upstream error instead of `Unexpected token '<'`
