@@ -162,6 +162,8 @@ serve(async (req) => {
     postMode = useDirectPost ? "DIRECT_POST" : "MEDIA_UPLOAD";
 
     const postData: Record<string, unknown> = {
+      media_type: "PHOTO",
+      post_mode: postMode,
       source_info: {
         source: "PULL_FROM_URL",
         photo_images: publicUrls,
@@ -174,9 +176,7 @@ serve(async (req) => {
       },
     };
 
-    endpoint = useDirectPost
-      ? "https://open.tiktokapis.com/v2/post/publish/content/init/"
-      : "https://open.tiktokapis.com/v2/post/publish/inbox/photo/init/";
+    endpoint = "https://open.tiktokapis.com/v2/post/publish/content/init/";
 
     console.log(
       `Submitting via ${postMode} (audited=${audited}, hostedUrlsOnly=${hostedUrlsOnly}) to ${endpoint}`
