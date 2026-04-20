@@ -1,96 +1,50 @@
 
+
 ## Diagnosis
 
-The new network details change the diagnosis:
+The diagnostics from the hardened error handler now reveal the real cause:
 
-- The client request to `post-to-tiktok` is now small (`Content-Length: 693`), so the old oversized-payload problem is no longer the active failure.
-- The edge function itself returns JSON (`content-type: application/json`, body ~82 bytes), so the browser is not failing to parse HTML anymore.
-- The actual HTML parse error is happening inside `supabase/functions/post-to-tiktok/index.ts` at:
-  - `const result = await res.json();`
-- The TikTok upstream endpoint is returning HTML, and the function is trying to parse it as JSON. That is why the UI still shows:
-  - `Unexpected token '<', "<html> <h"... is not valid JSON`
+> **TikTok upstream returned non-JSON response (HTTP 404)**
 
-## What to change
+The endpoint `https://open.tiktokapis.com/v2/post/publish/inbox/photo/init/` does not exist. TikTok's `inbox/...` route only exists for **video** (`inbox/video/init/`). For **photos**, there is a single unified endpoint: `/v2/post/publish/content/init/` — and the inbox vs. direct-post behavior is controlled by the `post_mode` field in the body, not by the URL.
 
-### 1. Harden `post-to-tiktok` response parsing
-Update `supabase/functions/post-to-tiktok/index.ts` so it never blindly calls `res.json()`.
+Confirmed against TikTok's official docs and a working community example:
+- Endpoint (always): `POST /v2/post/publish/content/init/`
+- Body must include `media_type: "PHOTO"` and `post_mode: "MEDIA_UPLOAD"` (sandbox/draft to inbox) or `"DIRECT_POST"` (audited public post)
+- `post_info` is required even in MEDIA_UPLOAD mode (with `title`)
+- `source_info.source: "PULL_FROM_URL"` + `photo_images` + `photo_cover_index`
 
-Implementation:
-- Read `content-type` first.
-- Read the response as text.
-- If the response is JSON, parse it safely.
-- If it is HTML or plain text, return a structured JSON error to the app with diagnostics:
-  - upstream status
-  - upstream content type
-  - endpoint used
-  - post mode used
-  - first part of the response body
-  - whether images were hosted URLs
+So the previous "remove `media_type` and `post_mode`" decision was wrong for the photo route — those fields are mandatory.
 
-This will replace the vague parse error with the real TikTok failure reason.
+## Fix
 
-### 2. Align the TikTok payload with the documented shape
-The current payload likely still does not match what TikTok expects for photo posting.
+Update `supabase/functions/post-to-tiktok/index.ts`:
 
-I will revise the payload rules in `post-to-tiktok/index.ts`:
-- keep `source_info.photo_images` and `photo_cover_index`
-- keep sandbox flow on the inbox/media-upload route
-- remove fields TikTok may reject in the chosen mode
-- use only fields confirmed for that mode
-- if direct-post is used later, keep only supported `post_info` fields
+1. Always POST to `https://open.tiktokapis.com/v2/post/publish/content/init/` (drop the inbox URL branch).
+2. Always include in the body:
+   - `media_type: "PHOTO"`
+   - `post_mode: "MEDIA_UPLOAD"` when unaudited, `"DIRECT_POST"` when audited
+3. Keep `post_info` with `title`, `privacy_level`, `disable_comment`. For MEDIA_UPLOAD, `privacy_level` is ignored by TikTok but harmless.
+4. Keep `source_info` with `source: "PULL_FROM_URL"`, `photo_images`, `photo_cover_index: 0`.
+5. Keep the `readUpstream` safe parser and structured diagnostics (they just proved their worth).
+6. Keep the hosted-URL pass-through (no re-upload for already-public URLs).
 
-Important detail from project memory:
-- TikTok payload support is strict
-- unsupported fields such as `description` can trigger API errors
-- `title` length noted in memory differs from the current constant, so I will normalize to the documented/working limit and supported fields only
+## Why this works
 
-### 3. Add explicit upstream diagnostics instead of generic failure
-Extend the function to return responses like:
-
-```text
-{
-  ok: false,
-  error: "TikTok upstream returned non-JSON response",
-  diagnostics: {
-    status,
-    contentType,
-    endpoint,
-    postMode,
-    responsePreview
-  }
-}
-```
-
-This makes future debugging immediate and prevents another blind error loop.
-
-### 4. Preserve the small-payload fix
-Keep the generation-time upload / hosted-URL flow already introduced:
-- `generate-image` continues returning hosted image URLs
-- `post-to-tiktok` continues skipping re-upload for hosted URLs
-- `post-to-instagram` can stay as-is unless I also mirror the same safe upstream parsing there for consistency
-
-## Expected outcome
-
-After this change:
-- the app will no longer surface the misleading HTML parse error
-- we’ll see the real TikTok rejection reason in the UI/logs
-- sandbox photo posting will either work, or fail with a precise actionable message
-- no regression to large request bodies
+- Eliminates the 404 — we'll be hitting a real TikTok endpoint.
+- Sandbox apps with `MEDIA_UPLOAD + PHOTO` land the post as a **draft in the creator's TikTok inbox** for manual publishing — exactly the documented behavior for unaudited apps.
+- Once the app is audited, flipping `TIKTOK_APP_AUDITED=true` switches to `DIRECT_POST` with no other changes.
 
 ## Files to update
 
 - `supabase/functions/post-to-tiktok/index.ts`
-- optionally `supabase/functions/post-to-instagram/index.ts` for the same safe upstream parsing pattern
 
-## No backend schema changes needed
+No DB, auth, storage, or client changes required.
 
-- No table changes
-- No auth changes
-- No storage changes
+## Verification
 
-## Verification after implementation
+1. Click "Post to TikTok" on any card.
+2. Expect a success toast with a `publish_id`.
+3. Open TikTok mobile app → notifications/inbox → confirm the photo draft appears.
+4. If it still fails, the structured diagnostics will now show the **real** TikTok error message instead of an HTTP 404 page.
 
-1. Test TikTok upload with an AI-generated card
-2. Test TikTok upload with a placeholder card
-3. Confirm the edge function returns structured JSON in both success and failure cases
-4. Confirm the UI shows the real upstream error instead of `Unexpected token '<'`
