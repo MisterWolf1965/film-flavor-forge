@@ -161,6 +161,8 @@ serve(async (req) => {
     const useDirectPost = audited;
     postMode = useDirectPost ? "DIRECT_POST" : "MEDIA_UPLOAD";
 
+    // For MEDIA_UPLOAD (sandbox/draft): post_info is NOT allowed — creator fills it in the TikTok app.
+    // For DIRECT_POST (audited): post_info IS required with title + privacy_level.
     const postData: Record<string, unknown> = {
       media_type: "PHOTO",
       post_mode: postMode,
@@ -169,12 +171,15 @@ serve(async (req) => {
         photo_images: publicUrls,
         photo_cover_index: 0,
       },
-      post_info: {
+    };
+
+    if (useDirectPost) {
+      postData.post_info = {
         title,
         privacy_level: privacyLevel,
         disable_comment: false,
-      },
-    };
+      };
+    }
 
     endpoint = "https://open.tiktokapis.com/v2/post/publish/content/init/";
 
