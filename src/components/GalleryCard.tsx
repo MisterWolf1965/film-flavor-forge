@@ -62,7 +62,27 @@ export function GalleryCard({ content }: GalleryCardProps) {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      toast.success("Posted to TikTok! 🎵");
+      const message = data?.message ||
+        (data?.postMode === "MEDIA_UPLOAD"
+          ? "Sent to TikTok draft inbox. Open TikTok on the connected account to finish."
+          : "Submitted to TikTok.");
+      toast.success(message, { duration: 7000 });
+
+      if (data?.publishId) {
+        console.log("TikTok publish ID:", data.publishId, "mode:", data.postMode);
+        setTimeout(async () => {
+          const { data: statusData, error: statusError } = await supabase.functions.invoke("tiktok-publish-status", {
+            body: { publishId: data.publishId },
+          });
+
+          if (statusError || statusData?.error) {
+            console.warn("TikTok publish status check failed:", statusError || statusData?.error);
+            return;
+          }
+
+          console.log("TikTok publish status:", statusData);
+        }, 2500);
+      }
     } catch (e: any) {
       toast.error(e.message || "Failed to post to TikTok");
     } finally {
