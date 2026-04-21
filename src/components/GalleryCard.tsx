@@ -81,6 +81,14 @@ export function GalleryCard({ content }: GalleryCardProps) {
           }
 
           console.log("TikTok publish status:", statusData);
+          if (statusData?.failed) {
+            toast.error(
+              statusData.failReason
+                ? `TikTok processing failed: ${statusData.failReason}`
+                : "TikTok accepted the upload, but processing failed on TikTok.",
+              { duration: 9000 }
+            );
+          }
         }, 2500);
       }
     } catch (e: any) {
