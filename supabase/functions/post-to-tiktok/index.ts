@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const TIKTOK_TITLE_MAX_LENGTH = 150;
+const VERIFIED_DOMAIN = "https://film-flavor-forge.lovable.app";
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
@@ -15,6 +16,10 @@ function normalizeText(value: string): string {
 
 function isHostedPublicUrl(url: string): boolean {
   return url.startsWith("http://") || url.startsWith("https://");
+}
+
+function toVerifiedImageUrl(imageUrl: string): string {
+  return `${VERIFIED_DOMAIN}/functions/v1/tiktok-image-proxy?src=${encodeURIComponent(imageUrl)}`;
 }
 
 async function ensureJpegPublicUrl(
@@ -125,10 +130,11 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1. Resolve image URLs (skip re-upload for hosted)
+    // 1. Resolve image URLs, then proxy through the verified TikTok domain.
     const publicUrls = await Promise.all(
       imageUrls.map((url) => ensureJpegPublicUrl(supabase, url))
     );
+    const verifiedImageUrls = publicUrls.map(toVerifiedImageUrl);
     hostedUrlsOnly = imageUrls.every(isHostedPublicUrl);
 
     // 2. Token
@@ -168,7 +174,7 @@ serve(async (req) => {
       post_mode: postMode,
       source_info: {
         source: "PULL_FROM_URL",
-        photo_images: publicUrls,
+        photo_images: verifiedImageUrls,
         photo_cover_index: 0,
       },
     };
@@ -211,7 +217,7 @@ serve(async (req) => {
             endpoint,
             postMode,
             hostedUrlsOnly,
-            imageCount: publicUrls.length,
+            imageCount: verifiedImageUrls.length,
             responsePreview: upstream.preview,
           },
         }),
@@ -235,7 +241,7 @@ serve(async (req) => {
             endpoint,
             postMode,
             hostedUrlsOnly,
-            imageCount: publicUrls.length,
+            imageCount: verifiedImageUrls.length,
           },
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
