@@ -60,7 +60,7 @@ async function fetchImageBytes(imageUrl: string): Promise<{ bytes: Uint8Array; c
 }
 
 async function normalizeImageToJpegPublicUrl(
-  supabase: ReturnType<typeof createClient>,
+  supabase: ReturnType<typeof createClient<any, "public", any>>,
   imageUrl: string
 ): Promise<string> {
   const { Image } = await import("https://deno.land/x/imagescript@1.3.0/mod.ts");
