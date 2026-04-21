@@ -18,6 +18,17 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
   });
 }
 
+function buildImageHeaders(upstream: Response, contentType: string) {
+  const headers = new Headers(corsHeaders);
+  headers.set("Content-Type", contentType);
+  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+
+  const contentLength = upstream.headers.get("content-length");
+  if (contentLength) headers.set("Content-Length", contentLength);
+
+  return headers;
+}
+
 function parseSourceUrl(req: Request): URL {
   const requestUrl = new URL(req.url);
   const src = requestUrl.searchParams.get("src");
@@ -39,7 +50,7 @@ function parseSourceUrl(req: Request): URL {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  if (req.method !== "GET") {
+  if (req.method !== "GET" && req.method !== "HEAD") {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
@@ -61,13 +72,11 @@ serve(async (req) => {
       return jsonResponse({ error: "Source URL did not return an image" }, 400);
     }
 
-    return new Response(upstream.body, {
+    const headers = buildImageHeaders(upstream, contentType);
+
+    return new Response(req.method === "HEAD" ? null : upstream.body, {
       status: 200,
-      headers: {
-        ...corsHeaders,
-        "Content-Type": contentType,
-        "Cache-Control": "public, max-age=31536000, immutable",
-      },
+      headers,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

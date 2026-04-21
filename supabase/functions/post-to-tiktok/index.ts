@@ -22,38 +22,64 @@ function toVerifiedImageUrl(imageUrl: string): string {
   return `${VERIFIED_DOMAIN}/functions/v1/tiktok-image-proxy?src=${encodeURIComponent(imageUrl)}`;
 }
 
-async function ensureJpegPublicUrl(
-  supabase: ReturnType<typeof createClient>,
-  imageUrl: string
-): Promise<string> {
-  if (isHostedPublicUrl(imageUrl)) return imageUrl;
+async function fetchImageBytes(imageUrl: string): Promise<{ bytes: Uint8Array; contentType: string; source: string }> {
+  if (isHostedPublicUrl(imageUrl)) {
+    const sourceUrl = new URL(imageUrl);
+    const res = await fetch(imageUrl, {
+      headers: { "User-Agent": "CINE.MACHINE TikTok JPEG normalizer" },
+    });
+    if (!res.ok) throw new Error(`Failed to fetch image source (HTTP ${res.status})`);
+
+    const contentType = res.headers.get("content-type") || "application/octet-stream";
+    if (!contentType.startsWith("image/")) {
+      throw new Error(`Source URL did not return an image (${contentType})`);
+    }
+
+    return {
+      bytes: new Uint8Array(await res.arrayBuffer()),
+      contentType,
+      source: `${sourceUrl.hostname}${sourceUrl.pathname}`,
+    };
+  }
 
   if (!imageUrl.startsWith("data:")) {
     throw new Error("Invalid image URL format");
   }
 
-  const base64Data = imageUrl.split(",")[1];
-  let imageBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-
-  const isPng =
-    imageBytes[0] === 0x89 &&
-    imageBytes[1] === 0x50 &&
-    imageBytes[2] === 0x4e &&
-    imageBytes[3] === 0x47;
-  if (isPng) {
-    const { Image } = await import("https://deno.land/x/imagescript@1.3.0/mod.ts");
-    const img = await Image.decode(imageBytes);
-    const jpegBytes = await img.encodeJPEG(85);
-    imageBytes = new Uint8Array(jpegBytes);
+  const [metadata, base64Data] = imageUrl.split(",");
+  const contentType = metadata.match(/^data:([^;]+)/)?.[1] || "image/png";
+  if (!contentType.startsWith("image/")) {
+    throw new Error(`Data URL did not contain an image (${contentType})`);
   }
+
+  return {
+    bytes: Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0)),
+    contentType,
+    source: "data-url-image",
+  };
+}
+
+async function normalizeImageToJpegPublicUrl(
+  supabase: ReturnType<typeof createClient<any, "public", any>>,
+  imageUrl: string
+): Promise<string> {
+  const { Image } = await import("https://deno.land/x/imagescript@1.3.0/mod.ts");
+  const source = await fetchImageBytes(imageUrl);
+  const img = await Image.decode(source.bytes);
+  const jpegBytes = new Uint8Array(await img.encodeJPEG(90));
 
   const fileName = `tt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
   const { error } = await supabase.storage
     .from("instagram-images")
-    .upload(fileName, imageBytes, { contentType: "image/jpeg", upsert: true });
+    .upload(fileName, jpegBytes, { contentType: "image/jpeg", upsert: true });
 
   if (error) throw new Error(`Upload failed: ${error.message}`);
-  return supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
+
+  const publicUrl = supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
+  console.log(
+    `TikTok normalized image: source=${source.source}, sourceType=${source.contentType}, jpeg=${publicUrl}`
+  );
+  return publicUrl;
 }
 
 async function fetchCreatorInfo(accessToken: string) {
@@ -130,9 +156,9 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1. Resolve image URLs, then proxy through the verified TikTok domain.
+    // 1. Normalize every image to a fresh TikTok-safe JPEG, then proxy through the verified domain.
     const publicUrls = await Promise.all(
-      imageUrls.map((url) => ensureJpegPublicUrl(supabase, url))
+      imageUrls.map((url) => normalizeImageToJpegPublicUrl(supabase, url))
     );
     const verifiedImageUrls = publicUrls.map(toVerifiedImageUrl);
     hostedUrlsOnly = imageUrls.every(isHostedPublicUrl);
@@ -190,7 +216,7 @@ serve(async (req) => {
     endpoint = "https://open.tiktokapis.com/v2/post/publish/content/init/";
 
     console.log(
-      `Submitting via ${postMode} (audited=${audited}, hostedUrlsOnly=${hostedUrlsOnly}) to ${endpoint}`
+      `Submitting via ${postMode} (audited=${audited}, hostedUrlsOnly=${hostedUrlsOnly}, imageCount=${verifiedImageUrls.length}) to ${endpoint}`
     );
     console.log("Payload:", JSON.stringify(postData));
 
@@ -251,6 +277,8 @@ serve(async (req) => {
     const successMessage = useDirectPost
       ? "Submitted to TikTok for publishing."
       : "Sent to TikTok as a draft. Open TikTok on the connected account to finish posting.";
+
+    console.log(`TikTok accepted publishId=${result.data?.publish_id || "none"}, postMode=${postMode}`);
 
     return new Response(
       JSON.stringify({
