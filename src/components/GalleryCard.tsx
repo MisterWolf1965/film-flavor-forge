@@ -82,8 +82,12 @@ export function GalleryCard({ content }: GalleryCardProps) {
 
           console.log("TikTok publish status:", statusData);
           if (statusData?.failed) {
+            const fileFormatMessage =
+              "TikTok rejected the image format. Uploads are now converted to JPEG before retrying.";
             toast.error(
-              statusData.failReason
+              statusData.failReason === "file_format_check_failed"
+                ? fileFormatMessage
+                : statusData.failReason
                 ? `TikTok processing failed: ${statusData.failReason}`
                 : "TikTok accepted the upload, but processing failed on TikTok.",
               { duration: 9000 }
