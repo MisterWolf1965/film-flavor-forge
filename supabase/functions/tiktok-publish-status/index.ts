@@ -81,7 +81,7 @@ serve(async (req) => {
 
     const result = upstream.body as {
       error?: { code?: string; message?: string };
-      data?: { status?: string; publish_status?: string; fail_reason?: string };
+      data?: { status?: string; publish_status?: string; fail_reason?: string; publicaly_available_post_id?: string };
     };
 
     if (result.error?.code && result.error.code !== "ok") {
@@ -93,10 +93,16 @@ serve(async (req) => {
       });
     }
 
+    const status = result.data?.status || result.data?.publish_status || "unknown";
+    const failReason = result.data?.fail_reason || "";
+
     return jsonResponse({
       ok: true,
       publishId,
-      status: result.data?.status || result.data?.publish_status || "unknown",
+      status,
+      failed: status.toUpperCase() === "FAILED",
+      failReason,
+      postId: result.data?.publicaly_available_post_id,
       raw: result,
     });
   } catch (e) {
