@@ -1,148 +1,130 @@
 
-## What happened
+## What the new TikTok status means
 
-Yes — from the app/backend side, this looks like TikTok accepted the request.
-
-The important clues are:
-
-- Network status is `200`
-- Response size is only ~86 B, which matches the function's success response shape:
-  ```json
-  { "ok": true, "publishId": "...", "postMode": "MEDIA_UPLOAD" }
-  ```
-- The UI showed “Posted to TikTok”, which only happens when the function did **not** return an error.
-
-But because the app is still in **sandbox**, this does **not** mean a public TikTok post appears on your profile. In sandbox / `MEDIA_UPLOAD` mode, TikTok only creates a draft-like upload for the connected TikTok account. It should appear inside the TikTok mobile app flow/inbox/notifications for the same account, not as a published post.
-
-## Likely reasons you do not see it on the phone
-
-### 1. It is sandbox `MEDIA_UPLOAD`, not public posting
-The backend logs show:
+TikTok is no longer rejecting the URL ownership. It is successfully receiving the verified-domain URLs and then failing during its media validation step with:
 
 ```text
-postMode: MEDIA_UPLOAD
-audited=false
+file_format_check_failed
 ```
 
-That means TikTok accepted an upload initialization, but the user still has to complete/post it inside TikTok.
-
-### 2. The UI success message is too generic
-Right now the app says:
+For this AI-generated upload, the source image is:
 
 ```text
-Posted to TikTok!
+gen-1776754605421-5amh50j1.png
 ```
 
-That is misleading in sandbox. It should say something like:
+The current code stores AI-generated images as PNG files and, because they are already public hosted URLs, `post-to-tiktok` passes them through unchanged before wrapping them in the verified-domain proxy. The existing PNG-to-JPEG conversion only runs for base64 `data:` images, not for already-hosted storage URLs.
 
-```text
-Sent to TikTok as a draft. Open the TikTok app inbox/notifications to finish posting.
-```
-
-### 3. We are not checking TikTok publish status after `publish_id`
-The current function returns success immediately after TikTok gives a `publish_id`. TikTok also provides a status-check endpoint for content publishing. We should poll/query that status so the UI can show whether TikTok is still processing, failed later, or created the draft successfully.
-
-### 4. The mobile app must be signed into the same TikTok account
-The connected TikTok account appears to be the one stored in the credentials table. If the phone is logged into a different TikTok account, the upload/draft will not appear there.
+So the likely fix is: before sending any image to TikTok, normalize it into a TikTok-safe JPEG file, then proxy that JPEG through the verified domain.
 
 ## Plan
 
-### 1. Improve the success response from `post-to-tiktok`
-Update `supabase/functions/post-to-tiktok/index.ts` so success responses include clearer mode-specific fields:
+### 1. Add TikTok-specific image normalization in `post-to-tiktok`
 
-```json
-{
-  "ok": true,
-  "publishId": "...",
-  "postMode": "MEDIA_UPLOAD",
-  "audited": false,
-  "message": "Sent to TikTok as a draft. Open the TikTok app inbox/notifications to finish posting."
-}
-```
+Update `supabase/functions/post-to-tiktok/index.ts` so every image is converted into a fresh JPEG public URL before being sent to TikTok.
 
-For production / audited mode:
-
-```json
-{
-  "ok": true,
-  "publishId": "...",
-  "postMode": "DIRECT_POST",
-  "audited": true,
-  "message": "Submitted to TikTok for publishing."
-}
-```
-
-### 2. Add a TikTok publish status function
-Add a new backend function:
+The updated flow will be:
 
 ```text
-supabase/functions/tiktok-publish-status/index.ts
+input image URL/data URL
+→ fetch or decode bytes
+→ validate it is an image
+→ decode with ImageScript
+→ convert to RGB JPEG
+→ upload as .jpg with content-type image/jpeg
+→ wrap the JPEG URL through tiktok-image-proxy
+→ submit to TikTok
 ```
 
-It will:
+This fixes the current gap where hosted `.png` AI images bypass conversion.
 
-- Accept a `publishId`
-- Read the stored TikTok access token
-- Call TikTok's publish status endpoint
-- Return structured status data to the client
+### 2. Replace `ensureJpegPublicUrl` with a stronger implementation
 
-Example response:
+Current behavior:
 
-```json
-{
-  "ok": true,
-  "publishId": "...",
-  "status": "...",
-  "raw": { "...": "TikTok response" }
-}
+```text
+data URL PNG → converts to JPEG
+hosted URL PNG → returns as-is
 ```
 
-This gives us a way to debug cases where TikTok accepts the upload init but does not surface it on the phone.
+New behavior:
 
-### 3. Update the TikTok button UI message
-Update `src/components/GalleryCard.tsx`:
+```text
+data URL PNG/JPEG/WebP if decodable → upload normalized JPEG
+hosted URL PNG/JPEG/WebP if decodable → fetch, decode, upload normalized JPEG
+```
 
-- If `postMode === "MEDIA_UPLOAD"`:
-  - Show: “Sent to TikTok draft inbox. Open TikTok on the connected account to finish.”
-- If `postMode === "DIRECT_POST"`:
-  - Show: “Submitted to TikTok.”
-- If `publishId` exists:
-  - Include it in the console log for debugging.
-- If status polling is available:
-  - Optionally call `tiktok-publish-status` after a short delay and log/show the result.
+Implementation details:
+- For hosted URLs, fetch the image server-side.
+- Reject non-image content types early.
+- Decode the image with `imagescript`.
+- Encode to JPEG at around quality `90`.
+- Upload to the existing public `instagram-images` bucket with a `tt-...jpg` filename.
+- Return the newly uploaded JPEG public URL.
 
-### 4. Keep the image proxy in place
-The latest logs show image URLs are now correctly wrapped through:
+### 3. Keep the verified-domain proxy
+
+After normalization, still wrap the JPEG storage URL through:
 
 ```text
 https://film-flavor-forge.lovable.app/functions/v1/tiktok-image-proxy?src=...
 ```
 
-So the previous `url_ownership_unverified` issue appears fixed. No changes needed there unless status checks reveal TikTok still cannot fetch the images.
+This keeps the URL ownership fix intact while also satisfying TikTok’s media format validation.
 
-## What you should check manually now
+### 4. Add diagnostics to confirm what TikTok receives
 
-Before code changes, check these:
+In `post-to-tiktok`, log useful non-secret diagnostics:
 
-1. Open TikTok on the phone.
-2. Make sure you are logged into the same TikTok account that was connected through the app.
-3. Check:
-   - Inbox
-   - System notifications
-   - Drafts
-   - Upload/post creation screen
-4. Do not expect it on the public profile while sandbox mode is active.
+```text
+original image URL host/path
+detected source content-type
+normalized JPEG storage URL
+number of images submitted
+postMode
+publishId
+```
+
+Do not log access tokens or secrets.
+
+### 5. Optionally harden the proxy response headers
+
+Update `supabase/functions/tiktok-image-proxy/index.ts` to make TikTok’s crawler see the image more clearly:
+
+- Preserve `Content-Type: image/jpeg` for normalized TikTok images.
+- Add `Content-Length` when available.
+- Add a simple `HEAD` handler that returns image headers without streaming the full body, in case TikTok probes URLs before fetching them.
+
+### 6. Improve the UI failure message slightly
+
+Update `src/components/GalleryCard.tsx` so if TikTok returns:
+
+```text
+file_format_check_failed
+```
+
+the toast says something more actionable:
+
+```text
+TikTok rejected the image format. I’m converting uploads to JPEG and retrying should fix this.
+```
+
+After the normalization fix, this toast should no longer appear, but it will be clearer if TikTok rejects another file.
 
 ## Files to update
 
 - `supabase/functions/post-to-tiktok/index.ts`
-- `supabase/functions/tiktok-publish-status/index.ts` new
+- `supabase/functions/tiktok-image-proxy/index.ts`
 - `src/components/GalleryCard.tsx`
 
 ## Verification after implementation
 
-1. Click TikTok post on a placeholder card.
-2. Confirm the toast says it was sent as a draft, not publicly posted.
-3. Confirm the response includes `publishId` and `postMode: MEDIA_UPLOAD`.
-4. Query publish status using the new function.
-5. Check TikTok mobile app with the same connected account.
+1. Post the AI-generated image again.
+2. Confirm the `post-to-tiktok` logs show `.jpg` normalized images, not `.png`.
+3. Confirm the payload still uses `film-flavor-forge.lovable.app/functions/v1/tiktok-image-proxy`.
+4. Confirm `tiktok-publish-status` no longer returns `file_format_check_failed`.
+5. Since the app is still in sandbox, confirm the result appears as a TikTok draft/inbox item rather than a public profile post.
+
+## Expected outcome
+
+TikTok should accept the AI-generated images because it receives verified-domain URLs pointing to normalized JPEG files instead of raw AI-generated PNGs.
