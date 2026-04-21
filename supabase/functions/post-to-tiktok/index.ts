@@ -248,8 +248,18 @@ serve(async (req) => {
       );
     }
 
+    const successMessage = useDirectPost
+      ? "Submitted to TikTok for publishing."
+      : "Sent to TikTok as a draft. Open TikTok on the connected account to finish posting.";
+
     return new Response(
-      JSON.stringify({ ok: true, publishId: result.data?.publish_id, postMode }),
+      JSON.stringify({
+        ok: true,
+        publishId: result.data?.publish_id,
+        postMode,
+        audited,
+        message: successMessage,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
