@@ -1,58 +1,148 @@
 
-## Diagnosis
+## What happened
 
-From the edge function logs, two attempts were just made and both went to TikTok with images on hosts TikTok does not consider verified:
+Yes — from the app/backend side, this looks like TikTok accepted the request.
 
-- AI-generated card → `https://hbnpvglyoteuxrvliyxt.supabase.co/storage/v1/object/public/instagram-images/...`
-- Placeholder card → `https://picsum.photos/seed/.../...`
+The important clues are:
 
-You verified `film-flavor-forge.lovable.app` on TikTok, but neither `supabase.co` nor `picsum.photos` is on that domain — so TikTok still rejects with `url_ownership_unverified`. Audit/production status doesn't change this rule; even production apps must serve `PULL_FROM_URL` images from a verified host.
+- Network status is `200`
+- Response size is only ~86 B, which matches the function's success response shape:
+  ```json
+  { "ok": true, "publishId": "...", "postMode": "MEDIA_UPLOAD" }
+  ```
+- The UI showed “Posted to TikTok”, which only happens when the function did **not** return an error.
 
-The only reliable fix without DNS changes is to **proxy every image through your verified domain** so TikTok fetches from `https://film-flavor-forge.lovable.app/...`.
+But because the app is still in **sandbox**, this does **not** mean a public TikTok post appears on your profile. In sandbox / `MEDIA_UPLOAD` mode, TikTok only creates a draft-like upload for the connected TikTok account. It should appear inside the TikTok mobile app flow/inbox/notifications for the same account, not as a published post.
+
+## Likely reasons you do not see it on the phone
+
+### 1. It is sandbox `MEDIA_UPLOAD`, not public posting
+The backend logs show:
+
+```text
+postMode: MEDIA_UPLOAD
+audited=false
+```
+
+That means TikTok accepted an upload initialization, but the user still has to complete/post it inside TikTok.
+
+### 2. The UI success message is too generic
+Right now the app says:
+
+```text
+Posted to TikTok!
+```
+
+That is misleading in sandbox. It should say something like:
+
+```text
+Sent to TikTok as a draft. Open the TikTok app inbox/notifications to finish posting.
+```
+
+### 3. We are not checking TikTok publish status after `publish_id`
+The current function returns success immediately after TikTok gives a `publish_id`. TikTok also provides a status-check endpoint for content publishing. We should poll/query that status so the UI can show whether TikTok is still processing, failed later, or created the draft successfully.
+
+### 4. The mobile app must be signed into the same TikTok account
+The connected TikTok account appears to be the one stored in the credentials table. If the phone is logged into a different TikTok account, the upload/draft will not appear there.
 
 ## Plan
 
-### 1. New edge function: `tiktok-image-proxy`
-- Path: `supabase/functions/tiktok-image-proxy/index.ts`
-- Public (no JWT) — needs a config block in `supabase/config.toml` with `verify_jwt = false`.
-- `GET /functions/v1/tiktok-image-proxy?src=<encoded-url>`
-- Server-side fetches `src`, streams bytes back with proper `Content-Type` and a long cache header.
-- Allowlist hosts to prevent abuse:
-  - `picsum.photos`
-  - `hbnpvglyoteuxrvliyxt.supabase.co`
-- Reject anything else with 400.
+### 1. Improve the success response from `post-to-tiktok`
+Update `supabase/functions/post-to-tiktok/index.ts` so success responses include clearer mode-specific fields:
 
-### 2. Update `post-to-tiktok`
-- Add constant `VERIFIED_DOMAIN = "https://film-flavor-forge.lovable.app"`.
-- Keep base64 → Supabase Storage upload for AI images (so we always have a stable source URL).
-- Remove the "skip when already hosted" pass-through for the TikTok submission step.
-- Right before building the payload, wrap every image URL:
-  ```
-  `${VERIFIED_DOMAIN}/functions/v1/tiktok-image-proxy?src=${encodeURIComponent(originalUrl)}`
-  ```
-- Submit the wrapped URLs in `source_info.photo_images`.
-- Keep `readUpstream` safe parser and structured diagnostics.
+```json
+{
+  "ok": true,
+  "publishId": "...",
+  "postMode": "MEDIA_UPLOAD",
+  "audited": false,
+  "message": "Sent to TikTok as a draft. Open the TikTok app inbox/notifications to finish posting."
+}
+```
 
-### 3. No other changes
-- No DB / auth / client / Instagram changes.
-- Existing TikTok verification files in `public/` stay.
+For production / audited mode:
 
-## Why this works
-- TikTok sees only `film-flavor-forge.lovable.app` URLs — matches the verified domain.
-- Proxy fetches the real bytes from `picsum.photos` or Supabase Storage server-side.
-- Works in both sandbox and production once audit is approved.
+```json
+{
+  "ok": true,
+  "publishId": "...",
+  "postMode": "DIRECT_POST",
+  "audited": true,
+  "message": "Submitted to TikTok for publishing."
+}
+```
 
-## Heads-up
-- App is still in sandbox (`audited=false`), so successful posts will land as **drafts in the TikTok inbox**, not public. Once audited and `TIKTOK_APP_AUDITED=true` is set, they go public via `DIRECT_POST` — no other code changes needed.
-- The verified host must be the **published** `film-flavor-forge.lovable.app`, not the preview URL.
+### 2. Add a TikTok publish status function
+Add a new backend function:
 
-## Files
-- `supabase/functions/tiktok-image-proxy/index.ts` (new)
-- `supabase/config.toml` (add `[functions.tiktok-image-proxy] verify_jwt = false`)
-- `supabase/functions/post-to-tiktok/index.ts` (wrap URLs through proxy)
+```text
+supabase/functions/tiktok-publish-status/index.ts
+```
 
-## Verification
-1. Open `https://film-flavor-forge.lovable.app/functions/v1/tiktok-image-proxy?src=https%3A%2F%2Fpicsum.photos%2F800%2F450` in a browser → should return an image.
-2. Click "Post to TikTok" on a placeholder card → expect `ok: true` with `publish_id`.
-3. Click "Post to TikTok" on an AI-generated card → expect the same.
-4. Open TikTok app inbox → both photo drafts should appear.
+It will:
+
+- Accept a `publishId`
+- Read the stored TikTok access token
+- Call TikTok's publish status endpoint
+- Return structured status data to the client
+
+Example response:
+
+```json
+{
+  "ok": true,
+  "publishId": "...",
+  "status": "...",
+  "raw": { "...": "TikTok response" }
+}
+```
+
+This gives us a way to debug cases where TikTok accepts the upload init but does not surface it on the phone.
+
+### 3. Update the TikTok button UI message
+Update `src/components/GalleryCard.tsx`:
+
+- If `postMode === "MEDIA_UPLOAD"`:
+  - Show: “Sent to TikTok draft inbox. Open TikTok on the connected account to finish.”
+- If `postMode === "DIRECT_POST"`:
+  - Show: “Submitted to TikTok.”
+- If `publishId` exists:
+  - Include it in the console log for debugging.
+- If status polling is available:
+  - Optionally call `tiktok-publish-status` after a short delay and log/show the result.
+
+### 4. Keep the image proxy in place
+The latest logs show image URLs are now correctly wrapped through:
+
+```text
+https://film-flavor-forge.lovable.app/functions/v1/tiktok-image-proxy?src=...
+```
+
+So the previous `url_ownership_unverified` issue appears fixed. No changes needed there unless status checks reveal TikTok still cannot fetch the images.
+
+## What you should check manually now
+
+Before code changes, check these:
+
+1. Open TikTok on the phone.
+2. Make sure you are logged into the same TikTok account that was connected through the app.
+3. Check:
+   - Inbox
+   - System notifications
+   - Drafts
+   - Upload/post creation screen
+4. Do not expect it on the public profile while sandbox mode is active.
+
+## Files to update
+
+- `supabase/functions/post-to-tiktok/index.ts`
+- `supabase/functions/tiktok-publish-status/index.ts` new
+- `src/components/GalleryCard.tsx`
+
+## Verification after implementation
+
+1. Click TikTok post on a placeholder card.
+2. Confirm the toast says it was sent as a draft, not publicly posted.
+3. Confirm the response includes `publishId` and `postMode: MEDIA_UPLOAD`.
+4. Query publish status using the new function.
+5. Check TikTok mobile app with the same connected account.
