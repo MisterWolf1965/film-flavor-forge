@@ -152,10 +152,14 @@ serve(async (req) => {
     );
 
     // 1. Normalize every image to a fresh TikTok-safe JPEG, then proxy through the verified domain.
-    const publicUrls = await Promise.all(
+    // We send the Supabase Storage public URL directly: the Lovable static host
+    // does not forward /functions/v1/* (it returns the SPA HTML), so the
+    // tiktok-image-proxy on the verified domain cannot serve image bytes.
+    // The Supabase Storage hostname must be added as a verified URL prefix
+    // on the TikTok developer portal for unaudited (sandbox) apps.
+    const verifiedImageUrls = await Promise.all(
       imageUrls.map((url) => normalizeImageToJpegPublicUrl(supabase, url))
     );
-    const verifiedImageUrls = publicUrls.map(toVerifiedImageUrl);
     hostedUrlsOnly = imageUrls.every(isHostedPublicUrl);
 
     // 2. Token
