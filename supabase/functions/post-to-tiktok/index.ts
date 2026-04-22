@@ -8,7 +8,6 @@ const corsHeaders = {
 };
 
 const TIKTOK_TITLE_MAX_LENGTH = 150;
-const VERIFIED_DOMAIN = "https://film-flavor-forge.lovable.app";
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
@@ -16,10 +15,6 @@ function normalizeText(value: string): string {
 
 function isHostedPublicUrl(url: string): boolean {
   return url.startsWith("http://") || url.startsWith("https://");
-}
-
-function toVerifiedImageUrl(imageUrl: string): string {
-  return `${VERIFIED_DOMAIN}/functions/v1/tiktok-image-proxy?src=${encodeURIComponent(imageUrl)}`;
 }
 
 async function fetchImageBytes(imageUrl: string): Promise<{ bytes: Uint8Array; contentType: string; source: string }> {
@@ -157,10 +152,14 @@ serve(async (req) => {
     );
 
     // 1. Normalize every image to a fresh TikTok-safe JPEG, then proxy through the verified domain.
-    const publicUrls = await Promise.all(
+    // We send the Supabase Storage public URL directly: the Lovable static host
+    // does not forward /functions/v1/* (it returns the SPA HTML), so the
+    // tiktok-image-proxy on the verified domain cannot serve image bytes.
+    // The Supabase Storage hostname must be added as a verified URL prefix
+    // on the TikTok developer portal for unaudited (sandbox) apps.
+    const verifiedImageUrls = await Promise.all(
       imageUrls.map((url) => normalizeImageToJpegPublicUrl(supabase, url))
     );
-    const verifiedImageUrls = publicUrls.map(toVerifiedImageUrl);
     hostedUrlsOnly = imageUrls.every(isHostedPublicUrl);
 
     // 2. Token
