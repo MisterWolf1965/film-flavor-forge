@@ -9,6 +9,11 @@ const corsHeaders = {
 
 const TIKTOK_TITLE_MAX_LENGTH = 150;
 
+// The TikTok-verified domain that hosts the root verification .txt files.
+// TikTok will only fetch PULL_FROM_URL images from a domain whose ownership
+// has been verified in the TikTok Developer Portal.
+const TIKTOK_VERIFIED_DOMAIN = "https://film-flavor-forge.lovable.app";
+
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -75,6 +80,46 @@ async function normalizeImageToJpegPublicUrl(
     `TikTok normalized image: source=${source.source}, sourceType=${source.contentType}, jpeg=${publicUrl}`
   );
   return { publicUrl, bytes: jpegBytes };
+}
+
+/**
+ * Build the TikTok-verified-domain proxy URL for a normalized JPEG.
+ * TikTok's crawler will only follow PULL_FROM_URL links on a domain whose
+ * ownership it has verified via the root .txt files in /public.
+ */
+function buildVerifiedProxyUrl(jpegPublicUrl: string): string {
+  return `${TIKTOK_VERIFIED_DOMAIN}/functions/v1/tiktok-image-proxy?src=${encodeURIComponent(jpegPublicUrl)}`;
+}
+
+/**
+ * Preflight a candidate PULL_FROM_URL to confirm it actually returns image bytes
+ * to a TikTok-like crawler. If the verified domain serves the SPA HTML shell
+ * (because the published host intercepts unknown paths), TikTok's media
+ * validation will fail downstream — we want to detect that here and fail fast
+ * with a clear, actionable error instead of pretending the post succeeded.
+ */
+async function assertProxyServesImage(url: string): Promise<void> {
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { "User-Agent": "TikTokBot/1.0 (compatible; PULL_FROM_URL preflight)" },
+  });
+  const contentType = res.headers.get("content-type") || "";
+  if (!res.ok) {
+    throw new Error(
+      `Verified-domain proxy returned HTTP ${res.status} for ${url}. TikTok cannot pull this image.`
+    );
+  }
+  if (!contentType.startsWith("image/")) {
+    // Drain the body so the connection closes cleanly.
+    await res.arrayBuffer().catch(() => {});
+    throw new Error(
+      `Verified-domain proxy did not return an image (content-type=${contentType || "unknown"}). ` +
+        `The published host is intercepting /functions/v1/tiktok-image-proxy and serving the app HTML shell, ` +
+        `so TikTok's PULL_FROM_URL crawler cannot fetch the JPEG. Fix the proxy routing on ${TIKTOK_VERIFIED_DOMAIN} ` +
+        `or use a different verified domain that serves raw image bytes at this path.`
+    );
+  }
+  await res.arrayBuffer().catch(() => {});
 }
 
 async function fetchCreatorInfo(accessToken: string) {
