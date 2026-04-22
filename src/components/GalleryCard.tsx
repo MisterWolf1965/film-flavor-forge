@@ -61,7 +61,13 @@ export function GalleryCard({ content }: GalleryCardProps) {
         body: { imageUrls: allImages, caption },
       });
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      // Only treat the post as successful when the backend confirms TikTok
+      // accepted the init request. Any error/validation/domain failure must
+      // surface as a toast.error so we don't claim a draft exists when it
+      // doesn't.
+      if (!data?.ok || data?.error) {
+        throw new Error(data?.error || "TikTok rejected the post.");
+      }
       const message = data?.message ||
         (data?.postMode === "MEDIA_UPLOAD"
           ? "Sent to TikTok draft inbox. Open TikTok on the connected account to finish."
