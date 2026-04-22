@@ -1,130 +1,126 @@
 
-## What the new TikTok status means
+## Diagnosis
 
-TikTok is no longer rejecting the URL ownership. It is successfully receiving the verified-domain URLs and then failing during its media validation step with:
+The current TikTok photo request is invalid for the API shape now used in `post-to-tiktok`.
 
-```text
-file_format_check_failed
+The logs show the app is sending:
+
+```json
+{
+  "media_type": "PHOTO",
+  "post_mode": "MEDIA_UPLOAD",
+  "source_info": {
+    "source": "FILE_UPLOAD",
+    "photo_cover_index": 0,
+    "photo_count": 5
+  }
+}
 ```
 
-For this AI-generated upload, the source image is:
+For TikTok photo posting, the documented `content/init` payload expects `source_info.source = "PULL_FROM_URL"` with a `photo_images` array. That matches the error you are seeing:
 
 ```text
-gen-1776754605421-5amh50j1.png
+The request source info is empty or incorrect
 ```
 
-The current code stores AI-generated images as PNG files and, because they are already public hosted URLs, `post-to-tiktok` passes them through unchanged before wrapping them in the verified-domain proxy. The existing PNG-to-JPEG conversion only runs for base64 `data:` images, not for already-hosted storage URLs.
+So the current `FILE_UPLOAD` workaround is not accepted for photo posts in this flow.
 
-So the likely fix is: before sending any image to TikTok, normalize it into a TikTok-safe JPEG file, then proxy that JPEG through the verified domain.
+There is also a second blocker: the previously verified published-domain proxy path served the app HTML instead of raw image bytes, so even the earlier `PULL_FROM_URL` attempt could not succeed reliably.
 
 ## Plan
 
-### 1. Add TikTok-specific image normalization in `post-to-tiktok`
+### 1. Restore TikTok photo posting to the compliant request format
+Update `supabase/functions/post-to-tiktok/index.ts` to stop sending `FILE_UPLOAD` for `media_type: "PHOTO"`.
 
-Update `supabase/functions/post-to-tiktok/index.ts` so every image is converted into a fresh JPEG public URL before being sent to TikTok.
+New request shape:
 
-The updated flow will be:
-
-```text
-input image URL/data URL
-→ fetch or decode bytes
-→ validate it is an image
-→ decode with ImageScript
-→ convert to RGB JPEG
-→ upload as .jpg with content-type image/jpeg
-→ wrap the JPEG URL through tiktok-image-proxy
-→ submit to TikTok
+```json
+{
+  "media_type": "PHOTO",
+  "post_mode": "MEDIA_UPLOAD",
+  "source_info": {
+    "source": "PULL_FROM_URL",
+    "photo_cover_index": 0,
+    "photo_images": ["https://...jpg", "..."]
+  }
+}
 ```
 
-This fixes the current gap where hosted `.png` AI images bypass conversion.
+Keep the current JPEG normalization step so every generated image is converted to a clean `.jpg` first.
 
-### 2. Replace `ensureJpegPublicUrl` with a stronger implementation
+### 2. Remove the dead `FILE_UPLOAD` branch for photos
+Simplify the function so it does not:
+- request upload URLs
+- send binary `PUT` uploads
+- treat photo posts like video uploads
 
-Current behavior:
+That logic is creating an invalid source payload and should be removed for TikTok photo publishing.
 
-```text
-data URL PNG → converts to JPEG
-hosted URL PNG → returns as-is
-```
+### 3. Reintroduce a verified, crawler-safe URL path
+Use a TikTok-verifiable public URL for each normalized JPEG. The app already has the root verification file in `public/`, so the remaining work is to make sure the URLs passed to TikTok return raw image bytes instead of the SPA HTML shell.
 
-New behavior:
+Implementation target:
+- use a dedicated TikTok image proxy URL only if it resolves to actual image bytes on the published domain
+- otherwise use a domain/path that TikTok can verify and fetch directly
 
-```text
-data URL PNG/JPEG/WebP if decodable → upload normalized JPEG
-hosted URL PNG/JPEG/WebP if decodable → fetch, decode, upload normalized JPEG
-```
+Because the current published `/functions/v1/...` path is being intercepted by the site shell, this step may require changing how the proxy is exposed, not just changing the TikTok payload.
 
-Implementation details:
-- For hosted URLs, fetch the image server-side.
-- Reject non-image content types early.
-- Decode the image with `imagescript`.
-- Encode to JPEG at around quality `90`.
-- Upload to the existing public `instagram-images` bucket with a `tt-...jpg` filename.
-- Return the newly uploaded JPEG public URL.
+### 4. Add a hard fail with actionable diagnostics
+If the function cannot produce a compliant `photo_images` array on a verified fetchable domain, return a clear error instead of a false-success draft message.
 
-### 3. Keep the verified-domain proxy
+The response should explain whether the failure is:
+- invalid TikTok payload shape
+- non-image proxy response
+- unverified URL source
+- sandbox/audit limitation
 
-After normalization, still wrap the JPEG storage URL through:
+### 5. Improve the UI message so success means actual acceptance
+Update `src/components/GalleryCard.tsx` so the success toast is only shown after TikTok accepts the compliant init request.
 
-```text
-https://film-flavor-forge.lovable.app/functions/v1/tiktok-image-proxy?src=...
-```
+If the backend returns a validation/domain error, surface that directly in the toast instead of showing “Sent to TikTok as a draft”.
 
-This keeps the URL ownership fix intact while also satisfying TikTok’s media format validation.
+### 6. Surface sandbox/audit state separately
+Keep the sandbox hint, but separate it from transport errors.
 
-### 4. Add diagnostics to confirm what TikTok receives
+Current issue:
+- payload/domain problem
 
-In `post-to-tiktok`, log useful non-secret diagnostics:
+Separate optional issue:
+- unaudited app means drafts/private only
 
-```text
-original image URL host/path
-detected source content-type
-normalized JPEG storage URL
-number of images submitted
-postMode
-publishId
-```
+That avoids implying audit is the reason for the current `source_info` failure.
 
-Do not log access tokens or secrets.
+## Required external dependency
 
-### 5. Optionally harden the proxy response headers
+A full fix depends on having a TikTok-verifiable image URL source that serves raw image bytes on the same verified domain family.
 
-Update `supabase/functions/tiktok-image-proxy/index.ts` to make TikTok’s crawler see the image more clearly:
+Right now:
+- the verification file exists at the site root
+- but the previously used published proxy path returned HTML instead of the image
 
-- Preserve `Content-Type: image/jpeg` for normalized TikTok images.
-- Add `Content-Length` when available.
-- Add a simple `HEAD` handler that returns image headers without streaming the full body, in case TikTok probes URLs before fetching them.
-
-### 6. Improve the UI failure message slightly
-
-Update `src/components/GalleryCard.tsx` so if TikTok returns:
-
-```text
-file_format_check_failed
-```
-
-the toast says something more actionable:
-
-```text
-TikTok rejected the image format. I’m converting uploads to JPEG and retrying should fix this.
-```
-
-After the normalization fix, this toast should no longer appear, but it will be clearer if TikTok rejects another file.
+If that routing limitation cannot be solved inside the project’s published hosting setup, the reliable fallback is to use a custom verified domain that can serve the normalized JPEGs directly.
 
 ## Files to update
 
 - `supabase/functions/post-to-tiktok/index.ts`
-- `supabase/functions/tiktok-image-proxy/index.ts`
 - `src/components/GalleryCard.tsx`
+- `supabase/functions/tiktok-image-proxy/index.ts` only if the proxy path is kept and can be made to return raw bytes on the published domain
 
-## Verification after implementation
+## Verification
 
-1. Post the AI-generated image again.
-2. Confirm the `post-to-tiktok` logs show `.jpg` normalized images, not `.png`.
-3. Confirm the payload still uses `film-flavor-forge.lovable.app/functions/v1/tiktok-image-proxy`.
-4. Confirm `tiktok-publish-status` no longer returns `file_format_check_failed`.
-5. Since the app is still in sandbox, confirm the result appears as a TikTok draft/inbox item rather than a public profile post.
+1. Post an AI-generated carousel again.
+2. Confirm the backend log payload uses:
+   ```json
+   "source_info": {
+     "source": "PULL_FROM_URL",
+     "photo_images": [...]
+   }
+   ```
+3. Confirm every URL in `photo_images` opens as a real JPEG response, not HTML.
+4. Confirm TikTok returns a real `publish_id` without the `source info is empty or incorrect` error.
+5. Confirm the status endpoint no longer reports immediate request validation failure.
+6. In sandbox mode, confirm the draft appears in the connected TikTok app inbox.
 
 ## Expected outcome
 
-TikTok should accept the AI-generated images because it receives verified-domain URLs pointing to normalized JPEG files instead of raw AI-generated PNGs.
+The TikTok request will stop failing at validation time because it will use the API’s expected photo-post format again, and the app will only report success after TikTok accepts a valid `PULL_FROM_URL` photo payload backed by real fetchable JPEG URLs.
