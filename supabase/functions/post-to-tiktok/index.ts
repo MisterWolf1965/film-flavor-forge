@@ -57,7 +57,7 @@ async function fetchImageBytes(imageUrl: string): Promise<{ bytes: Uint8Array; c
 async function normalizeImageToJpegPublicUrl(
   supabase: ReturnType<typeof createClient<any, "public", any>>,
   imageUrl: string
-): Promise<string> {
+): Promise<{ publicUrl: string; bytes: Uint8Array }> {
   const { Image } = await import("https://deno.land/x/imagescript@1.3.0/mod.ts");
   const source = await fetchImageBytes(imageUrl);
   const img = await Image.decode(source.bytes);
@@ -74,7 +74,7 @@ async function normalizeImageToJpegPublicUrl(
   console.log(
     `TikTok normalized image: source=${source.source}, sourceType=${source.contentType}, jpeg=${publicUrl}`
   );
-  return publicUrl;
+  return { publicUrl, bytes: jpegBytes };
 }
 
 async function fetchCreatorInfo(accessToken: string) {
