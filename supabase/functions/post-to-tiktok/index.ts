@@ -173,25 +173,6 @@ async function readUpstream(res: Response) {
   };
 }
 
-/**
- * Upload a single image's bytes directly to TikTok via the FILE_UPLOAD upload_url.
- * TikTok returns one upload_url per photo when source=FILE_UPLOAD.
- */
-async function uploadBytesToTikTok(uploadUrl: string, bytes: Uint8Array): Promise<void> {
-  const res = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "image/jpeg",
-      "Content-Length": String(bytes.byteLength),
-    },
-    body: bytes,
-  });
-  if (!res.ok) {
-    const preview = (await res.text()).slice(0, 300);
-    throw new Error(`TikTok upload PUT failed (HTTP ${res.status}): ${preview}`);
-  }
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
