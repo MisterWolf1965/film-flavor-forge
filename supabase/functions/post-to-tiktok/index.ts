@@ -57,7 +57,7 @@ async function fetchImageBytes(imageUrl: string): Promise<{ bytes: Uint8Array; c
 async function normalizeImageToJpegPublicUrl(
   supabase: ReturnType<typeof createClient<any, "public", any>>,
   imageUrl: string
-): Promise<string> {
+): Promise<{ publicUrl: string; bytes: Uint8Array }> {
   const { Image } = await import("https://deno.land/x/imagescript@1.3.0/mod.ts");
   const source = await fetchImageBytes(imageUrl);
   const img = await Image.decode(source.bytes);
@@ -74,7 +74,7 @@ async function normalizeImageToJpegPublicUrl(
   console.log(
     `TikTok normalized image: source=${source.source}, sourceType=${source.contentType}, jpeg=${publicUrl}`
   );
-  return publicUrl;
+  return { publicUrl, bytes: jpegBytes };
 }
 
 async function fetchCreatorInfo(accessToken: string) {
@@ -128,6 +128,25 @@ async function readUpstream(res: Response) {
   };
 }
 
+/**
+ * Upload a single image's bytes directly to TikTok via the FILE_UPLOAD upload_url.
+ * TikTok returns one upload_url per photo when source=FILE_UPLOAD.
+ */
+async function uploadBytesToTikTok(uploadUrl: string, bytes: Uint8Array): Promise<void> {
+  const res = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "image/jpeg",
+      "Content-Length": String(bytes.byteLength),
+    },
+    body: bytes,
+  });
+  if (!res.ok) {
+    const preview = (await res.text()).slice(0, 300);
+    throw new Error(`TikTok upload PUT failed (HTTP ${res.status}): ${preview}`);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -151,15 +170,14 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1. Normalize every image to a fresh TikTok-safe JPEG, then proxy through the verified domain.
-    // We send the Supabase Storage public URL directly: the Lovable static host
-    // does not forward /functions/v1/* (it returns the SPA HTML), so the
-    // tiktok-image-proxy on the verified domain cannot serve image bytes.
-    // The Supabase Storage hostname must be added as a verified URL prefix
-    // on the TikTok developer portal for unaudited (sandbox) apps.
-    const verifiedImageUrls = await Promise.all(
+    // 1. Normalize every image to a fresh TikTok-safe JPEG. We keep the raw
+    // bytes in memory because TikTok's FILE_UPLOAD path requires a binary PUT
+    // to a per-image upload_url returned by the init call. This bypasses the
+    // URL-ownership verification rules entirely.
+    const normalized = await Promise.all(
       imageUrls.map((url) => normalizeImageToJpegPublicUrl(supabase, url))
     );
+    const jpegByteList = normalized.map((n) => n.bytes);
     hostedUrlsOnly = imageUrls.every(isHostedPublicUrl);
 
     // 2. Token
@@ -180,11 +198,9 @@ serve(async (req) => {
       }
     }
 
-    // 4. Build payload — strict shape per TikTok docs / project memory
-    // - inbox/photo/init for sandbox (MEDIA_UPLOAD)
-    // - content/init for audited apps (DIRECT_POST)
-    // Only include fields confirmed supported. No `description`, no `media_type`,
-    // no `post_mode` field inside body (route already implies the mode).
+    // 4. Build payload using FILE_UPLOAD so TikTok returns an upload_url and
+    // we PUT the JPEG bytes directly. Avoids URL ownership / domain
+    // verification entirely (works in sandbox for unaudited apps).
     const normalizedCaption = normalizeText(caption);
     const title =
       normalizedCaption.slice(0, TIKTOK_TITLE_MAX_LENGTH) || "New Post";
@@ -192,15 +208,14 @@ serve(async (req) => {
     const useDirectPost = audited;
     postMode = useDirectPost ? "DIRECT_POST" : "MEDIA_UPLOAD";
 
-    // For MEDIA_UPLOAD (sandbox/draft): post_info is NOT allowed — creator fills it in the TikTok app.
-    // For DIRECT_POST (audited): post_info IS required with title + privacy_level.
     const postData: Record<string, unknown> = {
       media_type: "PHOTO",
       post_mode: postMode,
       source_info: {
-        source: "PULL_FROM_URL",
-        photo_images: verifiedImageUrls,
+        source: "FILE_UPLOAD",
         photo_cover_index: 0,
+        // TikTok needs to know how many photos so it returns matching upload_urls.
+        photo_count: jpegByteList.length,
       },
     };
 
@@ -215,7 +230,7 @@ serve(async (req) => {
     endpoint = "https://open.tiktokapis.com/v2/post/publish/content/init/";
 
     console.log(
-      `Submitting via ${postMode} (audited=${audited}, hostedUrlsOnly=${hostedUrlsOnly}, imageCount=${verifiedImageUrls.length}) to ${endpoint}`
+      `Submitting via ${postMode} FILE_UPLOAD (audited=${audited}, imageCount=${jpegByteList.length}) to ${endpoint}`
     );
     console.log("Payload:", JSON.stringify(postData));
 
@@ -242,7 +257,7 @@ serve(async (req) => {
             endpoint,
             postMode,
             hostedUrlsOnly,
-            imageCount: verifiedImageUrls.length,
+            imageCount: jpegByteList.length,
             responsePreview: upstream.preview,
           },
         }),
@@ -250,7 +265,10 @@ serve(async (req) => {
       );
     }
 
-    const result = upstream.body as { error?: { code?: string; message?: string }; data?: { publish_id?: string } };
+    const result = upstream.body as {
+      error?: { code?: string; message?: string };
+      data?: { publish_id?: string; upload_urls?: string[] };
+    };
 
     if (result.error?.code && result.error.code !== "ok") {
       const hint = !audited
@@ -266,7 +284,42 @@ serve(async (req) => {
             endpoint,
             postMode,
             hostedUrlsOnly,
-            imageCount: verifiedImageUrls.length,
+            imageCount: jpegByteList.length,
+          },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 5. PUT each JPEG to its corresponding upload_url.
+    const uploadUrls = result.data?.upload_urls || [];
+    if (uploadUrls.length !== jpegByteList.length) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: `TikTok returned ${uploadUrls.length} upload URL(s) for ${jpegByteList.length} image(s).`,
+          diagnostics: { endpoint, postMode, uploadUrlCount: uploadUrls.length },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    try {
+      await Promise.all(
+        uploadUrls.map((url, i) => uploadBytesToTikTok(url, jpegByteList[i]))
+      );
+      console.log(`Uploaded ${uploadUrls.length} JPEG(s) to TikTok via FILE_UPLOAD.`);
+    } catch (uploadErr) {
+      const message = uploadErr instanceof Error ? uploadErr.message : String(uploadErr);
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: `TikTok rejected the JPEG upload: ${message}`,
+          diagnostics: {
+            endpoint,
+            postMode,
+            imageCount: jpegByteList.length,
+            publishId: result.data?.publish_id,
           },
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
