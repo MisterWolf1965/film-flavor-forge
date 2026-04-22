@@ -8,7 +8,6 @@ const corsHeaders = {
 };
 
 const TIKTOK_TITLE_MAX_LENGTH = 150;
-const VERIFIED_DOMAIN = "https://film-flavor-forge.lovable.app";
 
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
@@ -16,10 +15,6 @@ function normalizeText(value: string): string {
 
 function isHostedPublicUrl(url: string): boolean {
   return url.startsWith("http://") || url.startsWith("https://");
-}
-
-function toVerifiedImageUrl(imageUrl: string): string {
-  return `${VERIFIED_DOMAIN}/functions/v1/tiktok-image-proxy?src=${encodeURIComponent(imageUrl)}`;
 }
 
 async function fetchImageBytes(imageUrl: string): Promise<{ bytes: Uint8Array; contentType: string; source: string }> {
