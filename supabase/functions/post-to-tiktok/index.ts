@@ -9,11 +9,6 @@ const corsHeaders = {
 
 const TIKTOK_TITLE_MAX_LENGTH = 150;
 
-// The TikTok-verified domain that hosts the root verification .txt files.
-// TikTok will only fetch PULL_FROM_URL images from a domain whose ownership
-// has been verified in the TikTok Developer Portal.
-const TIKTOK_VERIFIED_DOMAIN = "https://film-flavor-forge.lovable.app";
-
 function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
@@ -77,49 +72,30 @@ async function normalizeImageToJpegPublicUrl(
 
   const publicUrl = supabase.storage.from("instagram-images").getPublicUrl(fileName).data.publicUrl;
   console.log(
-    `TikTok normalized image: source=${source.source}, sourceType=${source.contentType}, jpeg=${publicUrl}`
+    `TikTok normalized image: source=${source.source}, type=${source.contentType}, size=${jpegBytes.byteLength}, jpeg=${publicUrl}`
   );
   return { publicUrl, bytes: jpegBytes };
 }
 
 /**
- * Build the TikTok-verified-domain proxy URL for a normalized JPEG.
- * TikTok's crawler will only follow PULL_FROM_URL links on a domain whose
- * ownership it has verified via the root .txt files in /public.
+ * Upload normalized JPEG bytes to a TikTok-issued upload_url using a single
+ * PUT. TikTok requires the exact byte count and Content-Range header.
  */
-function buildVerifiedProxyUrl(jpegPublicUrl: string): string {
-  return `${TIKTOK_VERIFIED_DOMAIN}/functions/v1/tiktok-image-proxy?src=${encodeURIComponent(jpegPublicUrl)}`;
-}
-
-/**
- * Preflight a candidate PULL_FROM_URL to confirm it actually returns image bytes
- * to a TikTok-like crawler. If the verified domain serves the SPA HTML shell
- * (because the published host intercepts unknown paths), TikTok's media
- * validation will fail downstream — we want to detect that here and fail fast
- * with a clear, actionable error instead of pretending the post succeeded.
- */
-async function assertProxyServesImage(url: string): Promise<void> {
-  const res = await fetch(url, {
-    method: "GET",
-    headers: { "User-Agent": "TikTokBot/1.0 (compatible; PULL_FROM_URL preflight)" },
+async function uploadJpegToTikTok(uploadUrl: string, bytes: Uint8Array) {
+  const total = bytes.byteLength;
+  const res = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "image/jpeg",
+      "Content-Length": String(total),
+      "Content-Range": `bytes 0-${total - 1}/${total}`,
+    },
+    body: bytes,
   });
-  const contentType = res.headers.get("content-type") || "";
   if (!res.ok) {
-    throw new Error(
-      `Verified-domain proxy returned HTTP ${res.status} for ${url}. TikTok cannot pull this image.`
-    );
+    const text = await res.text().catch(() => "");
+    throw new Error(`TikTok JPEG upload failed (HTTP ${res.status}): ${text.slice(0, 300)}`);
   }
-  if (!contentType.startsWith("image/")) {
-    // Drain the body so the connection closes cleanly.
-    await res.arrayBuffer().catch(() => {});
-    throw new Error(
-      `Verified-domain proxy did not return an image (content-type=${contentType || "unknown"}). ` +
-        `The published host is intercepting /functions/v1/tiktok-image-proxy and serving the app HTML shell, ` +
-        `so TikTok's PULL_FROM_URL crawler cannot fetch the JPEG. Fix the proxy routing on ${TIKTOK_VERIFIED_DOMAIN} ` +
-        `or use a different verified domain that serves raw image bytes at this path.`
-    );
-  }
-  await res.arrayBuffer().catch(() => {});
 }
 
 async function fetchCreatorInfo(accessToken: string) {
@@ -196,39 +172,14 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1. Normalize every image to a fresh TikTok-safe JPEG hosted in our
-    // public storage bucket, then wrap each one through the TikTok-verified
-    // domain's image proxy so the URL we send to TikTok lives on a domain
-    // whose ownership it has verified.
+    // 1. Normalize every image to a clean JPEG. We keep the public URL for
+    // logging/debug, but the bytes are what we actually push to TikTok via
+    // FILE_UPLOAD — no domain verification or crawler is involved.
     const normalized = await Promise.all(
       imageUrls.map((url) => normalizeImageToJpegPublicUrl(supabase, url))
     );
-    const photoImages = normalized.map((n) => buildVerifiedProxyUrl(n.publicUrl));
     hostedUrlsOnly = imageUrls.every(isHostedPublicUrl);
-
-    // Preflight: confirm the verified-domain proxy actually serves image bytes.
-    // If the published host intercepts the proxy path and returns the SPA HTML
-    // shell, TikTok's media validation will reject the post — fail fast with a
-    // clear, actionable error here instead of pretending we sent a draft.
-    try {
-      await assertProxyServesImage(photoImages[0]);
-    } catch (proxyErr) {
-      const message = proxyErr instanceof Error ? proxyErr.message : String(proxyErr);
-      console.error("TikTok proxy preflight failed:", message);
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          error: message,
-          diagnostics: {
-            stage: "verified_proxy_preflight",
-            verifiedDomain: TIKTOK_VERIFIED_DOMAIN,
-            sampleProxyUrl: photoImages[0],
-            imageCount: photoImages.length,
-          },
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const photoSizes = normalized.map((n) => n.bytes.byteLength);
 
     // 2. Token
     const { data: creds } = await supabase
@@ -248,9 +199,9 @@ serve(async (req) => {
       }
     }
 
-    // 4. Build payload using PULL_FROM_URL — the only TikTok-supported source
-    // for PHOTO posts. The photo_images URLs must live on a verified domain
-    // and must respond with raw image bytes (preflighted above).
+    // 4. Build payload using FILE_UPLOAD. We push raw JPEG bytes to TikTok's
+    // returned upload_urls instead of asking TikTok's crawler to fetch from
+    // our domain — this avoids all URL-ownership / verified-domain issues.
     const normalizedCaption = normalizeText(caption);
     const title =
       normalizedCaption.slice(0, TIKTOK_TITLE_MAX_LENGTH) || "New Post";
@@ -262,9 +213,10 @@ serve(async (req) => {
       media_type: "PHOTO",
       post_mode: postMode,
       source_info: {
-        source: "PULL_FROM_URL",
+        source: "FILE_UPLOAD",
         photo_cover_index: 0,
-        photo_images: photoImages,
+        photo_count: normalized.length,
+        photo_images: photoSizes.map((size) => ({ photo_size: size })),
       },
     };
 
@@ -279,7 +231,7 @@ serve(async (req) => {
     endpoint = "https://open.tiktokapis.com/v2/post/publish/content/init/";
 
     console.log(
-      `Submitting via ${postMode} PULL_FROM_URL (audited=${audited}, imageCount=${photoImages.length}) to ${endpoint}`
+      `Submitting via ${postMode} FILE_UPLOAD (audited=${audited}, imageCount=${normalized.length}, sizes=${photoSizes.join(",")}) to ${endpoint}`
     );
     console.log("Payload:", JSON.stringify(postData));
 
@@ -306,7 +258,7 @@ serve(async (req) => {
             endpoint,
             postMode,
             hostedUrlsOnly,
-            imageCount: photoImages.length,
+            imageCount: normalized.length,
             responsePreview: upstream.preview,
           },
         }),
@@ -316,7 +268,7 @@ serve(async (req) => {
 
     const result = upstream.body as {
       error?: { code?: string; message?: string };
-      data?: { publish_id?: string };
+      data?: { publish_id?: string; upload_urls?: string[] };
     };
 
     if (result.error?.code && result.error.code !== "ok") {
@@ -330,13 +282,24 @@ serve(async (req) => {
             endpoint,
             postMode,
             hostedUrlsOnly,
-            imageCount: photoImages.length,
+            imageCount: normalized.length,
             sandbox: !audited,
           },
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // 5. Push each JPEG to its issued upload_url (FILE_UPLOAD step).
+    const uploadUrls = result.data?.upload_urls || [];
+    if (uploadUrls.length !== normalized.length) {
+      throw new Error(
+        `TikTok returned ${uploadUrls.length} upload URLs for ${normalized.length} images`
+      );
+    }
+    await Promise.all(
+      uploadUrls.map((url, i) => uploadJpegToTikTok(url, normalized[i].bytes))
+    );
 
     const sandboxNote = !audited
       ? " (Sandbox mode — visible only as a private draft until the app is audited.)"

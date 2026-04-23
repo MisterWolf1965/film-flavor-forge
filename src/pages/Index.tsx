@@ -4,6 +4,7 @@ import { GeneratorView } from "@/components/GeneratorView";
 import { GalleryView } from "@/components/GalleryView";
 import { InstagramConnect } from "@/components/InstagramConnect";
 import { TikTokConnect } from "@/components/TikTokConnect";
+import { VideoUploadMockups } from "@/components/VideoUploadMockups";
 import { Button } from "@/components/ui/button";
 import { STYLES, generatePrompt, type GeneratedContent } from "@/lib/cinematic-data";
 import { toast } from "@/hooks/use-toast";
@@ -225,6 +226,9 @@ const Index = () => {
         <GalleryView items={gallery} />
         }
       </main>
+
+      {/* Always-visible test video upload mockups */}
+      <VideoUploadMockups />
     </div>);
 
 };
