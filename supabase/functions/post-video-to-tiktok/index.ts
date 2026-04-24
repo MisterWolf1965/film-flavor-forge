@@ -15,14 +15,23 @@ function normalizeText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-async function fetchVideoBytes(videoUrl: string): Promise<{ bytes: Uint8Array; contentType: string }> {
-  const res = await fetch(videoUrl);
-  if (!res.ok) throw new Error(`Failed to fetch video (HTTP ${res.status})`);
-  const contentType = res.headers.get("content-type") || "video/mp4";
-  if (!contentType.startsWith("video/")) {
-    throw new Error(`Source URL is not a video (${contentType})`);
+async function fetchMediaBytes(
+  mediaUrl: string
+): Promise<{ bytes: Uint8Array; contentType: string; kind: "video" | "image" }> {
+  const res = await fetch(mediaUrl);
+  if (!res.ok) throw new Error(`Failed to fetch media (HTTP ${res.status})`);
+  const contentType = res.headers.get("content-type") || "application/octet-stream";
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (contentType.startsWith("video/")) return { bytes, contentType, kind: "video" };
+  if (contentType.startsWith("image/")) return { bytes, contentType, kind: "image" };
+  // Fallback: sniff from extension
+  const lower = mediaUrl.toLowerCase().split("?")[0];
+  if (/\.(mp4|mov|webm|m4v)$/.test(lower)) return { bytes, contentType: "video/mp4", kind: "video" };
+  if (/\.(jpg|jpeg|png|webp|gif)$/.test(lower)) {
+    const guessed = lower.endsWith(".png") ? "image/png" : "image/jpeg";
+    return { bytes, contentType: guessed, kind: "image" };
   }
-  return { bytes: new Uint8Array(await res.arrayBuffer()), contentType };
+  throw new Error(`Source URL is not a video or image (${contentType})`);
 }
 
 async function uploadVideoChunks(uploadUrl: string, bytes: Uint8Array, contentType: string) {
