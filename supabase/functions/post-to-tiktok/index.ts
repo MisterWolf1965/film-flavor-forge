@@ -176,12 +176,11 @@ serve(async (req) => {
       }
     }
 
-    // 4. Build payload using PULL_FROM_URL for photo posts. TikTok's photo
-    // content/init contract expects photo_images to be URL strings; the prior
-    // FILE_UPLOAD + photo_size object shape is what triggered
-    // "The request parameter type is incorrect" on AI-generated photo posts.
-    // We still normalize everything to public JPEGs first so TikTok gets a
-    // stable, fetchable format.
+    // 4. Build payload using FILE_UPLOAD for photo posts — the same approach
+    // proven to work for videos. PULL_FROM_URL fails because TikTok cannot
+    // verify the supabase.co domain (url_ownership_unverified, masked as a
+    // generic parameter error). With FILE_UPLOAD, we PUT the JPEG bytes
+    // directly to the upload URLs TikTok returns — no domain verification.
     const normalizedCaption = normalizeText(caption);
     const title =
       normalizedCaption.slice(0, TIKTOK_TITLE_MAX_LENGTH) || "New Post";
@@ -189,13 +188,22 @@ serve(async (req) => {
     const useDirectPost = audited;
     postMode = useDirectPost ? "DIRECT_POST" : "MEDIA_UPLOAD";
 
+    const photoImages = normalized.map((n) => {
+      const size = n.bytes.byteLength;
+      return {
+        image_size: size,
+        chunk_size: size,
+        total_chunk_count: 1,
+      };
+    });
+
     const postData: Record<string, unknown> = {
       media_type: "PHOTO",
       post_mode: postMode,
       source_info: {
-        source: "PULL_FROM_URL",
+        source: "FILE_UPLOAD",
         photo_cover_index: 0,
-        photo_images: normalizedPublicUrls,
+        photo_images: photoImages,
       },
     };
 
@@ -215,7 +223,7 @@ serve(async (req) => {
     endpoint = "https://open.tiktokapis.com/v2/post/publish/content/init/";
 
     console.log(
-      `Submitting via ${postMode} PULL_FROM_URL (audited=${audited}, imageCount=${normalized.length}) to ${endpoint}`
+      `Submitting via ${postMode} FILE_UPLOAD (audited=${audited}, imageCount=${normalized.length}) to ${endpoint}`
     );
     console.log("Payload:", JSON.stringify(postData));
 
@@ -272,6 +280,46 @@ serve(async (req) => {
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // 5. Upload each JPEG's bytes to its corresponding upload URL.
+    const uploadUrls = result.data?.upload_urls || [];
+    if (uploadUrls.length !== normalized.length) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: `TikTok returned ${uploadUrls.length} upload URLs for ${normalized.length} images`,
+          diagnostics: { endpoint, postMode, imageCount: normalized.length },
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    for (let i = 0; i < uploadUrls.length; i++) {
+      const bytes = normalized[i].bytes;
+      const total = bytes.byteLength;
+      const putRes = await fetch(uploadUrls[i], {
+        method: "PUT",
+        headers: {
+          "Content-Type": "image/jpeg",
+          "Content-Length": String(total),
+          "Content-Range": `bytes 0-${total - 1}/${total}`,
+        },
+        body: bytes,
+      });
+      if (!putRes.ok) {
+        const errText = await putRes.text().catch(() => "");
+        console.error(`Photo ${i} upload failed: HTTP ${putRes.status} ${errText.slice(0, 200)}`);
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: `Photo upload failed (HTTP ${putRes.status}): ${errText.slice(0, 200)}`,
+            diagnostics: { endpoint, postMode, imageCount: normalized.length, failedIndex: i },
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      console.log(`Photo ${i + 1}/${uploadUrls.length} uploaded (${total} bytes)`);
     }
 
     const sandboxNote = !audited
