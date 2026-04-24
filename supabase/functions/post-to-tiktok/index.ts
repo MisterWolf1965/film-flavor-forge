@@ -250,7 +250,7 @@ serve(async (req) => {
 
     const result = upstream.body as {
       error?: { code?: string; message?: string };
-      data?: { publish_id?: string; upload_urls?: string[] };
+      data?: { publish_id?: string };
     };
 
     if (result.error?.code && result.error.code !== "ok") {
@@ -272,45 +272,8 @@ serve(async (req) => {
       );
     }
 
-    // 5. Upload each JPEG's bytes to its corresponding upload URL.
-    const uploadUrls = result.data?.upload_urls || [];
-    if (uploadUrls.length !== normalized.length) {
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          error: `TikTok returned ${uploadUrls.length} upload URLs for ${normalized.length} images`,
-          diagnostics: { endpoint, postMode, imageCount: normalized.length },
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    for (let i = 0; i < uploadUrls.length; i++) {
-      const bytes = normalized[i].bytes;
-      const total = bytes.byteLength;
-      const putRes = await fetch(uploadUrls[i], {
-        method: "PUT",
-        headers: {
-          "Content-Type": "image/jpeg",
-          "Content-Length": String(total),
-          "Content-Range": `bytes 0-${total - 1}/${total}`,
-        },
-        body: bytes,
-      });
-      if (!putRes.ok) {
-        const errText = await putRes.text().catch(() => "");
-        console.error(`Photo ${i} upload failed: HTTP ${putRes.status} ${errText.slice(0, 200)}`);
-        return new Response(
-          JSON.stringify({
-            ok: false,
-            error: `Photo upload failed (HTTP ${putRes.status}): ${errText.slice(0, 200)}`,
-            diagnostics: { endpoint, postMode, imageCount: normalized.length, failedIndex: i },
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      console.log(`Photo ${i + 1}/${uploadUrls.length} uploaded (${total} bytes)`);
-    }
+    // PULL_FROM_URL: TikTok pulls the JPEG public URLs directly. No PUT
+    // upload step needed — the publish_id is enough to track status.
 
     const sandboxNote = !audited
       ? " (Sandbox mode — visible only as a private draft until the app is audited.)"
