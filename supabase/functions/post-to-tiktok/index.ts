@@ -226,6 +226,11 @@ serve(async (req) => {
         privacy_level: privacyLevel,
         disable_comment: false,
       };
+    } else {
+      // MEDIA_UPLOAD (sandbox / unaudited) still requires a post_info block
+      // with at least a title — omitting it triggers
+      // "The request parameter type is incorrect".
+      postData.post_info = { title };
     }
 
     endpoint = "https://open.tiktokapis.com/v2/post/publish/content/init/";
