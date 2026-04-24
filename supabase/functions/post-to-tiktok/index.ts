@@ -188,42 +188,32 @@ serve(async (req) => {
     const useDirectPost = audited;
     postMode = useDirectPost ? "DIRECT_POST" : "MEDIA_UPLOAD";
 
-    const photoImages = normalized.map((n) => {
-      const size = n.bytes.byteLength;
-      return {
-        image_size: size,
-        chunk_size: size,
-        total_chunk_count: 1,
-      };
-    });
-
+    // TikTok's PHOTO content/init endpoint ONLY supports PULL_FROM_URL —
+    // FILE_UPLOAD is video-only and triggers "request parameter type is
+    // incorrect" when used for photos. We use the normalized JPEG public
+    // URLs (already JPEG, already on the verified supabase.co storage
+    // domain) and let TikTok pull them.
     const postData: Record<string, unknown> = {
       media_type: "PHOTO",
       post_mode: postMode,
+      post_info: {
+        title,
+        description: title,
+        disable_comment: false,
+        privacy_level: privacyLevel,
+        auto_add_music: false,
+      },
       source_info: {
-        source: "FILE_UPLOAD",
+        source: "PULL_FROM_URL",
         photo_cover_index: 0,
-        photo_images: photoImages,
+        photo_images: normalizedPublicUrls,
       },
     };
-
-    if (useDirectPost) {
-      postData.post_info = {
-        title,
-        privacy_level: privacyLevel,
-        disable_comment: false,
-      };
-    } else {
-      // MEDIA_UPLOAD (sandbox / unaudited) still requires a post_info block
-      // with at least a title — omitting it triggers
-      // "The request parameter type is incorrect".
-      postData.post_info = { title };
-    }
 
     endpoint = "https://open.tiktokapis.com/v2/post/publish/content/init/";
 
     console.log(
-      `Submitting via ${postMode} FILE_UPLOAD (audited=${audited}, imageCount=${normalized.length}) to ${endpoint}`
+      `Submitting via ${postMode} PULL_FROM_URL (audited=${audited}, imageCount=${normalized.length}) to ${endpoint}`
     );
     console.log("Payload:", JSON.stringify(postData));
 
@@ -260,7 +250,7 @@ serve(async (req) => {
 
     const result = upstream.body as {
       error?: { code?: string; message?: string };
-      data?: { publish_id?: string; upload_urls?: string[] };
+      data?: { publish_id?: string };
     };
 
     if (result.error?.code && result.error.code !== "ok") {
@@ -282,45 +272,8 @@ serve(async (req) => {
       );
     }
 
-    // 5. Upload each JPEG's bytes to its corresponding upload URL.
-    const uploadUrls = result.data?.upload_urls || [];
-    if (uploadUrls.length !== normalized.length) {
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          error: `TikTok returned ${uploadUrls.length} upload URLs for ${normalized.length} images`,
-          diagnostics: { endpoint, postMode, imageCount: normalized.length },
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    for (let i = 0; i < uploadUrls.length; i++) {
-      const bytes = normalized[i].bytes;
-      const total = bytes.byteLength;
-      const putRes = await fetch(uploadUrls[i], {
-        method: "PUT",
-        headers: {
-          "Content-Type": "image/jpeg",
-          "Content-Length": String(total),
-          "Content-Range": `bytes 0-${total - 1}/${total}`,
-        },
-        body: bytes,
-      });
-      if (!putRes.ok) {
-        const errText = await putRes.text().catch(() => "");
-        console.error(`Photo ${i} upload failed: HTTP ${putRes.status} ${errText.slice(0, 200)}`);
-        return new Response(
-          JSON.stringify({
-            ok: false,
-            error: `Photo upload failed (HTTP ${putRes.status}): ${errText.slice(0, 200)}`,
-            diagnostics: { endpoint, postMode, imageCount: normalized.length, failedIndex: i },
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      console.log(`Photo ${i + 1}/${uploadUrls.length} uploaded (${total} bytes)`);
-    }
+    // PULL_FROM_URL: TikTok pulls the JPEG public URLs directly. No PUT
+    // upload step needed — the publish_id is enough to track status.
 
     const sandboxNote = !audited
       ? " (Sandbox mode — visible only as a private draft until the app is audited.)"
