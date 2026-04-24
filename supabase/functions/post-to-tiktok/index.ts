@@ -77,27 +77,6 @@ async function normalizeImageToJpegPublicUrl(
   return { publicUrl, bytes: jpegBytes };
 }
 
-/**
- * Upload normalized JPEG bytes to a TikTok-issued upload_url using a single
- * PUT. TikTok requires the exact byte count and Content-Range header.
- */
-async function uploadJpegToTikTok(uploadUrl: string, bytes: Uint8Array) {
-  const total = bytes.byteLength;
-  const res = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "image/jpeg",
-      "Content-Length": String(total),
-      "Content-Range": `bytes 0-${total - 1}/${total}`,
-    },
-    body: bytes,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`TikTok JPEG upload failed (HTTP ${res.status}): ${text.slice(0, 300)}`);
-  }
-}
-
 async function fetchCreatorInfo(accessToken: string) {
   try {
     const creatorRes = await fetch(
@@ -175,11 +154,9 @@ serve(async (req) => {
     // 1. Normalize every image to a clean JPEG. We keep the public URL for
     // logging/debug, but the bytes are what we actually push to TikTok via
     // FILE_UPLOAD — no domain verification or crawler is involved.
-    const normalized = await Promise.all(
-      imageUrls.map((url) => normalizeImageToJpegPublicUrl(supabase, url))
-    );
+    const normalized = await Promise.all(imageUrls.map((url) => normalizeImageToJpegPublicUrl(supabase, url)));
     hostedUrlsOnly = imageUrls.every(isHostedPublicUrl);
-    const photoSizes = normalized.map((n) => n.bytes.byteLength);
+    const normalizedPublicUrls = normalized.map((n) => n.publicUrl);
 
     // 2. Token
     const { data: creds } = await supabase
@@ -199,9 +176,12 @@ serve(async (req) => {
       }
     }
 
-    // 4. Build payload using FILE_UPLOAD. We push raw JPEG bytes to TikTok's
-    // returned upload_urls instead of asking TikTok's crawler to fetch from
-    // our domain — this avoids all URL-ownership / verified-domain issues.
+    // 4. Build payload using PULL_FROM_URL for photo posts. TikTok's photo
+    // content/init contract expects photo_images to be URL strings; the prior
+    // FILE_UPLOAD + photo_size object shape is what triggered
+    // "The request parameter type is incorrect" on AI-generated photo posts.
+    // We still normalize everything to public JPEGs first so TikTok gets a
+    // stable, fetchable format.
     const normalizedCaption = normalizeText(caption);
     const title =
       normalizedCaption.slice(0, TIKTOK_TITLE_MAX_LENGTH) || "New Post";
@@ -213,10 +193,9 @@ serve(async (req) => {
       media_type: "PHOTO",
       post_mode: postMode,
       source_info: {
-        source: "FILE_UPLOAD",
+        source: "PULL_FROM_URL",
         photo_cover_index: 0,
-        photo_count: normalized.length,
-        photo_images: photoSizes.map((size) => ({ photo_size: size })),
+        photo_images: normalizedPublicUrls,
       },
     };
 
@@ -236,7 +215,7 @@ serve(async (req) => {
     endpoint = "https://open.tiktokapis.com/v2/post/publish/content/init/";
 
     console.log(
-      `Submitting via ${postMode} FILE_UPLOAD (audited=${audited}, imageCount=${normalized.length}, sizes=${photoSizes.join(",")}) to ${endpoint}`
+      `Submitting via ${postMode} PULL_FROM_URL (audited=${audited}, imageCount=${normalized.length}) to ${endpoint}`
     );
     console.log("Payload:", JSON.stringify(postData));
 
@@ -294,17 +273,6 @@ serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    // 5. Push each JPEG to its issued upload_url (FILE_UPLOAD step).
-    const uploadUrls = result.data?.upload_urls || [];
-    if (uploadUrls.length !== normalized.length) {
-      throw new Error(
-        `TikTok returned ${uploadUrls.length} upload URLs for ${normalized.length} images`
-      );
-    }
-    await Promise.all(
-      uploadUrls.map((url, i) => uploadJpegToTikTok(url, normalized[i].bytes))
-    );
 
     const sandboxNote = !audited
       ? " (Sandbox mode — visible only as a private draft until the app is audited.)"
