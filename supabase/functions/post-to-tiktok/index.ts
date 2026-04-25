@@ -109,12 +109,13 @@ async function readUpstream(res: Response) {
 
   if (contentType.includes("application/json")) {
     try {
-      return { kind: "json" as const, status: res.status, contentType, body: JSON.parse(rawText) };
+      return { kind: "json" as const, status: res.status, contentType, rawText, body: JSON.parse(rawText) };
     } catch {
       return {
         kind: "non-json" as const,
         status: res.status,
         contentType,
+        rawText,
         preview: rawText.slice(0, 500),
       };
     }
@@ -124,6 +125,7 @@ async function readUpstream(res: Response) {
     kind: "non-json" as const,
     status: res.status,
     contentType,
+    rawText,
     preview: rawText.slice(0, 500),
   };
 }
@@ -217,6 +219,7 @@ serve(async (req) => {
     });
 
     const upstream = await readUpstream(res);
+    console.log("TikTok raw response:", upstream.rawText);
 
     if (upstream.kind === "non-json") {
       console.error("TikTok non-JSON upstream:", upstream);
@@ -229,6 +232,7 @@ serve(async (req) => {
             contentType: upstream.contentType,
             endpoint,
             postMode,
+            rawTikTokResponse: upstream.rawText,
             hostedUrlsOnly,
             imageCount: normalized.length,
             responsePreview: upstream.preview,
@@ -251,6 +255,7 @@ serve(async (req) => {
           diagnostics: {
             status: upstream.status,
             errorCode: result.error.code,
+            rawTikTokResponse: upstream.rawText,
             endpoint,
             postMode,
             hostedUrlsOnly,
