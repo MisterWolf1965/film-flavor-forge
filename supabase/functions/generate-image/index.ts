@@ -7,27 +7,37 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-async function uploadDataUrlToStorage(dataUrl: string): Promise<string> {
+async function fetchImageBytes(imageUrl: string): Promise<Uint8Array> {
+  if (imageUrl.startsWith("data:")) {
+    const match = imageUrl.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
+    if (!match) throw new Error("Invalid data URL returned from AI");
+    return Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
+  }
+
+  const res = await fetch(imageUrl);
+  if (!res.ok) throw new Error(`Failed to fetch generated image (HTTP ${res.status})`);
+  const contentType = res.headers.get("content-type") || "application/octet-stream";
+  if (!contentType.startsWith("image/")) {
+    throw new Error(`Generated URL did not return an image (${contentType})`);
+  }
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+async function uploadImageAsJpegToStorage(imageUrl: string): Promise<string> {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
   );
 
-  // dataUrl looks like: data:image/png;base64,XXXX
-  const match = dataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-  if (!match) {
-    throw new Error("Invalid data URL returned from AI");
-  }
-  const contentType = match[1];
-  const base64 = match[2];
-  const ext = contentType.includes("png") ? "png" : contentType.includes("jpeg") ? "jpg" : "bin";
-
-  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  const fileName = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  const { Image } = await import("https://deno.land/x/imagescript@1.3.0/mod.ts");
+  const sourceBytes = await fetchImageBytes(imageUrl);
+  const image = await Image.decode(sourceBytes);
+  const jpegBytes = new Uint8Array(await image.encodeJPEG(90));
+  const fileName = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.jpg`;
 
   const { error } = await supabase.storage
     .from("instagram-images")
-    .upload(fileName, bytes, { contentType, upsert: true });
+    .upload(fileName, jpegBytes, { contentType: "image/jpeg", upsert: true });
 
   if (error) throw new Error(`Storage upload failed: ${error.message}`);
 
