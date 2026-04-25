@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Upload, Loader2, Instagram, Music, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeSecureFunction, postSecureFormData } from "@/integrations/supabase/secureInvoke";
 import { toast } from "@/hooks/use-toast";
 
 type Platform = "instagram" | "tiktok";
@@ -49,14 +49,15 @@ function useMockup() {
     setState((s) => ({ ...s, file, previewUrl, uploading: true, publicUrl: null }));
 
     try {
-      const ext = file.name.split(".").pop() || "mp4";
-      const fileName = `vid-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error } = await supabase.storage
-        .from("social-videos")
-        .upload(fileName, file, { contentType: file.type, upsert: true });
-      if (error) throw error;
-      const { data } = supabase.storage.from("social-videos").getPublicUrl(fileName);
-      setState((s) => ({ ...s, publicUrl: data.publicUrl, uploading: false }));
+      const fd = new FormData();
+      fd.append("file", file);
+      const result = (await postSecureFormData("upload-social-video", fd)) as
+        | { publicUrl?: string; error?: string }
+        | null;
+      if (!result?.publicUrl) {
+        throw new Error(result?.error || "Upload failed");
+      }
+      setState((s) => ({ ...s, publicUrl: result.publicUrl!, uploading: false }));
       toast({ title: "Video uploaded", description: "Ready to post." });
     } catch (e) {
       setState((s) => ({ ...s, uploading: false }));
@@ -90,7 +91,11 @@ function MockupFrame({
     setState((s) => ({ ...s, posting: true }));
     try {
       const fnName = platform === "instagram" ? "post-video-to-instagram" : "post-video-to-tiktok";
-      const { data, error } = await supabase.functions.invoke(fnName, {
+      const { data, error } = await invokeSecureFunction<{
+        ok?: boolean;
+        error?: string;
+        message?: string;
+      }>(fnName, {
         body: {
           videoUrl: state.publicUrl,
           caption: state.caption || `Test ${platform} video`,

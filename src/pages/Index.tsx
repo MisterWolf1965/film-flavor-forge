@@ -8,7 +8,7 @@ import { VideoUploadMockups } from "@/components/VideoUploadMockups";
 import { Button } from "@/components/ui/button";
 import { STYLES, generatePrompt, type GeneratedContent } from "@/lib/cinematic-data";
 import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeSecureFunction } from "@/integrations/supabase/secureInvoke";
 
 const MAX_AUTO = 10;
 
@@ -36,13 +36,15 @@ const Index = () => {
     if (useAI) {
       // Generate hero, storyboard, and 4 scene images in parallel
       const [heroResult, ...sceneResults] = await Promise.allSettled([
-        supabase.functions.invoke("generate-image", {
-          body: { prompt: result.imagePrompt }
-        }),
+        invokeSecureFunction<{ imageUrl?: string; error?: string; recoverable?: boolean }>(
+          "generate-image",
+          { body: { prompt: result.imagePrompt } }
+        ),
         ...result.skit.scenes.map((scene) =>
-          supabase.functions.invoke("generate-image", {
-            body: { prompt: scene }
-          })
+          invokeSecureFunction<{ imageUrl?: string; error?: string; recoverable?: boolean }>(
+            "generate-image",
+            { body: { prompt: scene } }
+          )
         ),
       ]);
 

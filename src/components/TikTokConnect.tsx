@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { CheckCircle, Loader2, Music, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeSecureFunction } from "@/integrations/supabase/secureInvoke";
 import { toast } from "@/hooks/use-toast";
 
 interface TikTokStatus {
@@ -23,20 +23,18 @@ export function TikTokConnect() {
   const checkStatus = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("tiktok_credentials")
-        .select("tiktok_user_id, token_expires_at")
-        .limit(1)
-        .maybeSingle();
-
+      const { data, error } = await invokeSecureFunction<{
+        connected: boolean;
+        tiktokUserId?: string;
+        expiresAt?: string;
+      }>("tiktok-status");
       if (error || !data) {
         setStatus({ connected: false });
       } else {
-        const expired = data.token_expires_at ? new Date(data.token_expires_at) < new Date() : false;
         setStatus({
-          connected: !expired,
-          tiktokUserId: data.tiktok_user_id,
-          expiresAt: data.token_expires_at,
+          connected: data.connected,
+          tiktokUserId: data.tiktokUserId,
+          expiresAt: data.expiresAt,
         });
       }
     } catch {
@@ -69,9 +67,10 @@ export function TikTokConnect() {
   const handleExchangeCode = async (code: string) => {
     setSaving(true);
     try {
-      const { data, error } = await supabase.functions.invoke("tiktok-oauth-callback", {
-        body: { code, redirectUri },
-      });
+      const { data, error } = await invokeSecureFunction<{
+        error?: string;
+        displayName?: string;
+      }>("tiktok-oauth-callback", { body: { code, redirectUri } });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       toast({ title: "TikTok Connected! 🎵", description: `Logged in as ${data.displayName || "TikTok user"}` });
