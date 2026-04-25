@@ -219,6 +219,7 @@ serve(async (req) => {
     });
 
     const upstream = await readUpstream(res);
+    console.log("TikTok raw response:", upstream.rawText);
 
     if (upstream.kind === "non-json") {
       console.error("TikTok non-JSON upstream:", upstream);
@@ -231,6 +232,7 @@ serve(async (req) => {
             contentType: upstream.contentType,
             endpoint,
             postMode,
+            rawTikTokResponse: upstream.rawText,
             hostedUrlsOnly,
             imageCount: normalized.length,
             responsePreview: upstream.preview,
@@ -253,6 +255,7 @@ serve(async (req) => {
           diagnostics: {
             status: upstream.status,
             errorCode: result.error.code,
+            rawTikTokResponse: upstream.rawText,
             endpoint,
             postMode,
             hostedUrlsOnly,
