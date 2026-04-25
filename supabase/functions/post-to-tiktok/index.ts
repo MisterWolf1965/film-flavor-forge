@@ -193,6 +193,7 @@ serve(async (req) => {
       },
       source_info: {
         source: "PULL_FROM_URL",
+        photo_cover_index: 0,
         photo_images: normalizedPublicUrls,
       },
       post_mode: postMode,
