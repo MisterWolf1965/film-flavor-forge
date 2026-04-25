@@ -109,12 +109,13 @@ async function readUpstream(res: Response) {
 
   if (contentType.includes("application/json")) {
     try {
-      return { kind: "json" as const, status: res.status, contentType, body: JSON.parse(rawText) };
+      return { kind: "json" as const, status: res.status, contentType, rawText, body: JSON.parse(rawText) };
     } catch {
       return {
         kind: "non-json" as const,
         status: res.status,
         contentType,
+        rawText,
         preview: rawText.slice(0, 500),
       };
     }
@@ -124,6 +125,7 @@ async function readUpstream(res: Response) {
     kind: "non-json" as const,
     status: res.status,
     contentType,
+    rawText,
     preview: rawText.slice(0, 500),
   };
 }
