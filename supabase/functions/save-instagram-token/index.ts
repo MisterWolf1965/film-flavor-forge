@@ -2,15 +2,37 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "x-app-secret, authorization, x-client-info, apikey, content-type",
 };
+
+
+function checkAppSecret(req: Request): Response | null {
+  const expected = Deno.env.get("APP_SECRET");
+  if (!expected) {
+    return new Response(JSON.stringify({ error: "Server misconfigured: APP_SECRET not set" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  const provided = req.headers.get("x-app-secret");
+  if (provided !== expected) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  return null;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  try {
+  const unauthorized = checkAppSecret(req);
+  if (unauthorized) return unauthorized;
+
+try {
     const { accessToken, igAccountId } = await req.json();
 
     if (!accessToken || !igAccountId) {
