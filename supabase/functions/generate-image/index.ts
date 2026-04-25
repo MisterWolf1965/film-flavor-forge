@@ -127,17 +127,15 @@ serve(async (req) => {
       throw new Error("No image generated");
     }
 
-    // Upload base64 to storage and return a short public URL.
-    // This keeps response payloads small for downstream callers (TikTok/IG posting).
+    // Convert every generated image to JPEG before storage so downstream
+    // callers always receive a public .jpg URL instead of a PNG/data URL.
     let imageUrl = rawImageUrl;
-    if (rawImageUrl.startsWith("data:")) {
-      try {
-        imageUrl = await uploadDataUrlToStorage(rawImageUrl);
-        console.log("Uploaded generated image to storage:", imageUrl);
-      } catch (uploadErr) {
-        console.error("Storage upload failed, falling back to data URL:", uploadErr);
-        // Fallback: still return data URL so generation isn't lost
-      }
+    try {
+      imageUrl = await uploadImageAsJpegToStorage(rawImageUrl);
+      console.log("Uploaded generated JPEG to storage:", imageUrl);
+    } catch (uploadErr) {
+      console.error("JPEG storage upload failed, falling back to original image URL:", uploadErr);
+      // Fallback: still return original image so generation isn't lost
     }
 
     return new Response(
