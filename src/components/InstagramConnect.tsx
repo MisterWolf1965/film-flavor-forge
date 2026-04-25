@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Instagram, CheckCircle, AlertCircle, Loader2, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeSecureFunction } from "@/integrations/supabase/secureInvoke";
 import { toast } from "@/hooks/use-toast";
 
 interface IgStatus {
@@ -24,7 +24,7 @@ export function InstagramConnect() {
   const checkStatus = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("instagram-status");
+      const { data, error } = await invokeSecureFunction<IgStatus>("instagram-status");
       if (error) throw error;
       setStatus(data as IgStatus);
     } catch {
@@ -57,9 +57,10 @@ export function InstagramConnect() {
     }
     setSaving(true);
     try {
-      const { data, error } = await supabase.functions.invoke("save-instagram-token", {
-        body: { accessToken: token.trim(), igAccountId: igId.trim() },
-      });
+      const { data, error } = await invokeSecureFunction<{ error?: string }>(
+        "save-instagram-token",
+        { body: { accessToken: token.trim(), igAccountId: igId.trim() } }
+      );
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       toast({ title: "Instagram Connected! 🎉", description: "Token saved and verified successfully." });

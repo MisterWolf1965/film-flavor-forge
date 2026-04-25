@@ -2,7 +2,7 @@ import { Heart, MessageCircle, Share2, Bookmark, Instagram, Music } from "lucide
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from "@/components/ui/carousel";
 import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeSecureFunction } from "@/integrations/supabase/secureInvoke";
 import type { GeneratedContent } from "@/lib/cinematic-data";
 
 interface GalleryCardProps {
@@ -38,7 +38,7 @@ export function GalleryCard({ content }: GalleryCardProps) {
       const body = allImages.length > 1
         ? { imageUrls: allImages, caption }
         : { imageUrl: allImages[0], caption };
-      const { data, error } = await supabase.functions.invoke("post-to-instagram", { body });
+      const { data, error } = await invokeSecureFunction<{ error?: string }>("post-to-instagram", { body });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       toast.success("Posted to Instagram! 🎉");
@@ -57,7 +57,13 @@ export function GalleryCard({ content }: GalleryCardProps) {
     setPostingTikTok(true);
     try {
       const caption = `${content.socialDescription}\n\n${content.tags.join(" ")}`;
-      const { data, error } = await supabase.functions.invoke("post-to-tiktok", {
+      const { data, error } = await invokeSecureFunction<{
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        postMode?: string;
+        publishId?: string;
+      }>("post-to-tiktok", {
         body: { imageUrls: allImages, caption },
       });
       if (error) throw error;
@@ -77,7 +83,11 @@ export function GalleryCard({ content }: GalleryCardProps) {
       if (data?.publishId) {
         console.log("TikTok publish ID:", data.publishId, "mode:", data.postMode);
         setTimeout(async () => {
-          const { data: statusData, error: statusError } = await supabase.functions.invoke("tiktok-publish-status", {
+          const { data: statusData, error: statusError } = await invokeSecureFunction<{
+            error?: string;
+            failed?: boolean;
+            failReason?: string;
+          }>("tiktok-publish-status", {
             body: { publishId: data.publishId },
           });
 
