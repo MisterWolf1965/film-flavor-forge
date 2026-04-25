@@ -165,16 +165,9 @@ serve(async (req) => {
       .maybeSingle();
     if (!creds) throw new Error("TikTok credentials missing.");
 
-    // 3. Privacy / mode
+    // 3. Privacy / mode — testing mode requires SELF_ONLY + DIRECT_POST
     const audited = (Deno.env.get("TIKTOK_APP_AUDITED") || "").toLowerCase() === "true";
-    let privacyLevel = "SELF_ONLY";
-    if (audited) {
-      const creatorResult = await fetchCreatorInfo(creds.access_token);
-      const options = creatorResult?.data?.privacy_level_options as string[] | undefined;
-      if (options?.includes("PUBLIC_TO_EVERYONE")) {
-        privacyLevel = "PUBLIC_TO_EVERYONE";
-      }
-    }
+    const privacyLevel = "SELF_ONLY";
 
     // 4. Build payload using FILE_UPLOAD for photo posts — the same approach
     // proven to work for videos. PULL_FROM_URL fails because TikTok cannot
@@ -185,8 +178,8 @@ serve(async (req) => {
     const title =
       normalizedCaption.slice(0, TIKTOK_TITLE_MAX_LENGTH) || "New Post";
 
-    const useDirectPost = audited;
-    postMode = useDirectPost ? "DIRECT_POST" : "MEDIA_UPLOAD";
+    const useDirectPost = true;
+    postMode = "DIRECT_POST";
 
     // TikTok's PHOTO content/init endpoint ONLY supports PULL_FROM_URL —
     // FILE_UPLOAD is video-only and triggers "request parameter type is
@@ -194,20 +187,16 @@ serve(async (req) => {
     // URLs (already JPEG, already on the verified supabase.co storage
     // domain) and let TikTok pull them.
     const postData: Record<string, unknown> = {
-      media_type: "PHOTO",
-      post_mode: postMode,
       post_info: {
         title,
-        description: title,
-        disable_comment: false,
         privacy_level: privacyLevel,
-        auto_add_music: false,
       },
       source_info: {
         source: "PULL_FROM_URL",
-        photo_cover_index: 0,
         photo_images: normalizedPublicUrls,
       },
+      post_mode: postMode,
+      media_type: "PHOTO",
     };
 
     endpoint = "https://open.tiktokapis.com/v2/post/publish/content/init/";
